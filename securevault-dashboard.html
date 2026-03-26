@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SecureVault — Live Dashboard</title>
+
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --bg:         #080c10;
+    --surface:    #0d1318;
+    --surface2:   #111820;
+    --border:     #1e2d3a;
+    --border2:    #243342;
+    --green:      #00e676;
+    --green-dim:  #00c85e40;
+    --amber:      #ffa726;
+    --amber-dim:  #ffa72630;
+    --red:        #ff3d3d;
+    --red-dim:    #ff3d3d30;
+    --blue:       #29b6f6;
+    --blue-dim:   #29b6f625;
+    --purple:     #ce93d8;
+    --text:       #e8f0f5;
+    --text-dim:   #7a9ab0;
+    --text-muted: #3d5668;
+    --mono:       'Share Tech Mono', monospace;
+    --sans:       'Syne', sans-serif;
+    --r:          6px;
+    --rl:         12px;
+    --glow-g:     0 0 18px #00e67650, 0 0 40px #00e67618;
+    --glow-r:     0 0 18px #ff3d3d60, 0 0 40px #ff3d3d20;
+    --glow-a:     0 0 18px #ffa72650, 0 0 40px #ffa72618;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+  body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,230,118,0.012) 2px,rgba(0,230,118,0.012) 4px),
+    linear-gradient(135deg,#0d1f2d08 25%,transparent 25%),linear-gradient(225deg,#0d1f2d08 25%,transparent 25%);
+    background-size:100% 4px,40px 40px,40px 40px}
+  .shell{position:relative;z-index:1;max-width:1340px;margin:0 auto;padding:0 24px 60px}
+
+  /* TOPBAR */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:22px 0 18px;border-bottom:1px solid var(--border)}
+  .brand{display:flex;align-items:center;gap:14px}
+  .brand-icon{width:42px;height:42px;border-radius:8px;background:linear-gradient(135deg,#00c85e,#007a40);display:grid;place-items:center;box-shadow:var(--glow-g);font-size:20px}
+  .brand-name{font-size:22px;font-weight:800;letter-spacing:-.5px}
+  .brand-name span{color:var(--green)}
+  .brand-sub{font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase;margin-top:2px}
+  .topbar-right{display:flex;align-items:center;gap:16px}
+  .conn-dot{width:8px;height:8px;border-radius:50%;background:#555;transition:background .3s,box-shadow .3s}
+  .conn-dot.live{background:var(--green);box-shadow:var(--glow-g);animation:pg 2s infinite}
+  .conn-dot.demo{background:var(--amber);box-shadow:var(--glow-a)}
+  .conn-label{font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:1px}
+  .clock{font-family:var(--mono);font-size:14px;color:var(--text-dim)}
+  @keyframes pg{0%,100%{opacity:1}50%{opacity:.4}}
+
+  /* CONFIG BANNER */
+  .cfg-banner{background:linear-gradient(90deg,#0d1f2d,#0d1318);border:1px solid var(--border2);border-left:3px solid var(--amber);border-radius:var(--r);padding:18px 22px;margin:22px 0;display:flex;align-items:flex-start;gap:14px}
+  .cfg-banner .ico{font-size:20px;flex-shrink:0;margin-top:3px}
+  .cfg-banner h3{font-size:13px;font-weight:700;color:var(--amber);margin-bottom:6px;letter-spacing:.5px}
+  .cfg-banner p{font-size:12px;color:var(--text-dim);margin-bottom:14px;line-height:1.6}
+  .cfg-sec{margin-bottom:14px}
+  .cfg-sec-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px}
+  .cfg-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .cfg-row input{background:#0a1520;border:1px solid var(--border2);border-radius:var(--r);padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--text);width:300px;outline:none;transition:border-color .2s}
+  .cfg-row input.wide{width:380px}
+  .cfg-row input:focus{border-color:var(--green)}
+  .cfg-row input::placeholder{color:var(--text-muted)}
+  .cfg-note{font-family:var(--mono);font-size:10px;color:var(--text-muted);margin-top:6px;line-height:1.7}
+  .cfg-note a{color:var(--blue);text-decoration:none}
+  .cfg-note a:hover{text-decoration:underline}
+  .btn-connect{background:linear-gradient(135deg,#00c85e,#007a40);border:none;border-radius:var(--r);padding:9px 20px;font-family:var(--sans);font-weight:700;font-size:12px;color:#000;cursor:pointer;letter-spacing:.5px;box-shadow:var(--glow-g);transition:opacity .2s,transform .1s}
+  .btn-connect:hover{opacity:.85;transform:translateY(-1px)}
+  .btn-connect:active{transform:translateY(0)}
+  #demo-btn{background:transparent;border:1px solid var(--border2);border-radius:var(--r);padding:9px 20px;font-family:var(--sans);font-weight:600;font-size:12px;color:var(--text-dim);cursor:pointer;transition:border-color .2s,color .2s}
+  #demo-btn:hover{border-color:var(--blue);color:var(--blue)}
+
+  /* STATUS HERO */
+  .hero{margin:28px 0 24px;border:1px solid var(--border);border-radius:var(--rl);background:var(--surface);padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;position:relative;overflow:hidden;transition:border-color .5s,box-shadow .5s}
+  .hero::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;transition:background .5s}
+  .hero.locked{border-color:#1a3020}.hero.locked::before{background:linear-gradient(90deg,transparent,var(--green),transparent)}
+  .hero.open{border-color:#3a2800;box-shadow:inset 0 0 60px #ffa72608}.hero.open::before{background:linear-gradient(90deg,transparent,var(--amber),transparent)}
+  .hero.timeout{border-color:#3a1a00}.hero.timeout::before{background:linear-gradient(90deg,transparent,var(--red),transparent)}
+  .hero.tamper{border-color:#3a0000;box-shadow:inset 0 0 60px #ff3d3d10}.hero.tamper::before{background:linear-gradient(90deg,transparent,var(--red),transparent)}
+  .state-left{display:flex;align-items:center;gap:20px}
+  .sdot{width:18px;height:18px;border-radius:50%;flex-shrink:0;transition:background .4s,box-shadow .4s}
+  .sdot.locked{background:var(--green);box-shadow:var(--glow-g)}
+  .sdot.open{background:var(--amber);box-shadow:var(--glow-a)}
+  .sdot.timeout{background:var(--red);animation:br 1s infinite}
+  .sdot.tamper{background:var(--red);box-shadow:var(--glow-r);animation:br .5s infinite}
+  @keyframes br{0%,100%{opacity:1;box-shadow:var(--glow-r)}50%{opacity:.3;box-shadow:none}}
+  .stxt h2{font-size:28px;font-weight:800;letter-spacing:-1px;transition:color .3s}
+  .stxt p{font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-top:4px;letter-spacing:1px}
+  .sl{color:var(--green)}.so{color:var(--amber)}.st{color:var(--red)}.sm{color:var(--red)}
+  .smeta{display:flex;gap:28px}
+  .mi{text-align:center}
+  .mi .v{font-size:26px;font-weight:700;font-family:var(--mono)}
+  .mi .l{font-size:10px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase;margin-top:3px}
+  .mi.w .v{color:var(--blue)}.mi.t .v{color:#f48fb1}.mi.h .v{color:var(--purple)}
+
+  /* GRID */
+  .grid{display:grid;gap:18px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr 1fr}
+  .g12{grid-template-columns:1fr 2fr}
+  @media(max-width:960px){.g2,.g3,.g12{grid-template-columns:1fr}}
+
+  /* CARD */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:22px 24px;transition:border-color .3s}
+  .card:hover{border-color:var(--border2)}
+  .ct{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:18px;display:flex;align-items:center;gap:8px}
+  .ct .dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+
+  /* CONTROLS */
+  .cbtns{display:flex;flex-direction:column;gap:12px}
+  .cbtn{border:none;border-radius:var(--r);padding:14px 20px;font-family:var(--sans);font-weight:700;font-size:13px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .2s,transform .1s}
+  .cbtn:hover{opacity:.85;transform:translateY(-2px)}.cbtn:active{transform:translateY(0)}
+  .cbtn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+  .cu{background:linear-gradient(135deg,#ffa726,#e65100);color:#000;box-shadow:var(--glow-a)}
+  .cl{background:linear-gradient(135deg,#00e676,#007a40);color:#000;box-shadow:var(--glow-g)}
+  .cs{background:linear-gradient(135deg,#ff3d3d,#a00000);color:#fff;box-shadow:var(--glow-r)}
+  .cmdst{font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-top:10px;padding:8px 12px;background:var(--surface2);border-radius:var(--r);min-height:34px;display:flex;align-items:center}
+  .cmdst.ok{color:var(--green)}.cmdst.err{color:var(--red)}
+
+  /* SENSORS */
+  .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .si{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+  .sn{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim)}
+  .sv{font-family:var(--mono);font-size:20px;font-weight:700}
+  .ss{font-size:10px;color:var(--text-muted)}
+  .vg{color:var(--green)}.va{color:var(--amber)}.vr{color:var(--red)}.vb{color:var(--blue)}.vp{color:#f48fb1}.vpu{color:var(--purple)}
+  .beam{height:6px;border-radius:3px;margin-top:4px;position:relative;overflow:hidden;background:var(--surface2)}
+  .beam-i{position:absolute;inset:0;background:linear-gradient(90deg,var(--blue),#0073a8);animation:bs 1.5s linear infinite;transition:opacity .3s}
+  @keyframes bs{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+  .beam.broken .beam-i{opacity:0}
+
+  /* CHART */
+  .chart-wrap{position:relative;height:220px}
+
+  /* EVENT LOG */
+  .elog{max-height:340px;overflow-y:auto}
+  .elog::-webkit-scrollbar{width:4px}
+  .elog::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+  .erow{display:grid;grid-template-columns:90px 1fr 80px;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;animation:si .25s ease}
+  @keyframes si{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .erow:last-child{border-bottom:none}
+  .erow:hover{background:var(--surface2)}
+  .ets{color:var(--text-muted);font-size:11px}
+  .eITEM_ADDED{color:var(--green)}.eITEM_REMOVED{color:var(--amber)}.eTAMPER{color:var(--red)}
+  .eDOOR_OPEN{color:var(--blue)}.eDOOR_CLOSE{color:var(--text-dim)}.eTIMEOUT{color:var(--red)}
+  .eLOCKED{color:var(--green)}.eUNLOCKED{color:var(--amber)}.eSILENCE{color:var(--text-dim)}
+  .eempty{color:var(--text-muted);font-size:12px;font-family:var(--mono);padding:24px 0;text-align:center}
+
+  /* AI */
+  .aipanel{background:var(--surface2);border:1px solid #1a1a3a;border-radius:var(--r);padding:16px 18px;font-size:14px;line-height:1.7;color:var(--text-dim);min-height:80px}
+  .ailabel{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--purple);margin-bottom:10px}
+  .ailabel::before{content:'▶ '}
+  .aiempty{color:var(--text-muted);font-family:var(--mono);font-size:12px}
+  .aithink{display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:12px;color:var(--purple)}
+  .aithink span{width:5px;height:5px;border-radius:50%;background:var(--purple);animation:ad 1.2s infinite}
+  .aithink span:nth-child(2){animation-delay:.2s}.aithink span:nth-child(3){animation-delay:.4s}
+  @keyframes ad{0%,100%{transform:translateY(0);opacity:1}50%{transform:translateY(-5px);opacity:.3}}
+  .aikey{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+  .aikey input{background:#0a1520;border:1px solid var(--border2);border-radius:var(--r);padding:7px 12px;font-family:var(--mono);font-size:11px;color:var(--text);flex:1;outline:none;transition:border-color .2s}
+  .aikey input:focus{border-color:var(--purple)}
+  .aikey input::placeholder{color:var(--text-muted)}
+  .aikey-lbl{font-family:var(--mono);font-size:10px;color:var(--text-muted);letter-spacing:1px;white-space:nowrap}
+  .aikey-lnk{font-family:var(--mono);font-size:10px;color:var(--blue);text-decoration:none;white-space:nowrap}
+  .aikey-lnk:hover{text-decoration:underline}
+
+  /* RISK SCORE BAR */
+  .risk-wrap{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+  .risk-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+  .risk-pct{font-size:11px;font-weight:700;transition:color .4s}
+  .risk-track{height:10px;background:#0a1520;border:1px solid var(--border2);border-radius:5px;overflow:hidden;position:relative}
+  .risk-fill{height:100%;width:0%;border-radius:5px;transition:width .6s cubic-bezier(.4,0,.2,1),background .4s;position:relative}
+  .risk-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.15),transparent);border-radius:5px}
+  .risk-level{font-family:var(--mono);font-size:11px;margin-top:5px;letter-spacing:1px;transition:color .4s}
+
+  /* ANOMALY ALERT */
+  .anomaly-alert{display:none;margin-top:10px;padding:10px 14px;background:var(--red-dim);border:1px solid var(--red);border-radius:var(--r);font-family:var(--mono);font-size:12px;color:var(--red);animation:si .3s ease}
+  .anomaly-alert.show{display:block}
+
+  /* FOOTER */
+  .footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px;color:var(--text-muted)}
+  .mgap{margin-bottom:18px}
+
+  /* TAMPER FLASH */
+  @keyframes tf{0%,100%{background:var(--bg)}50%{background:#1a0000}}
+  body.tamper-active{animation:tf .6s infinite}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">🔒</div>
+      <div>
+        <div class="brand-name">Secure<span>Vault</span></div>
+        <div class="brand-sub">IoT Smart Safe — Live Monitor</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="conn-dot" id="conn-dot"></div>
+      <span class="conn-label" id="conn-label">CONNECTING…</span>
+      <span class="clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- CONFIG BANNER (hidden after auto-connect succeeds) -->
+  <div class="cfg-banner" id="cfg-banner" style="display:none">
+    <div class="ico">⚙️</div>
+    <div style="flex:1">
+      <h3>CONNECTION FAILED — MANUAL CONFIGURATION</h3>
+      <p>Auto-connect failed (Supabase tables may not exist yet). Verify your credentials or use Demo Mode.</p>
+
+      <div class="cfg-sec">
+        <div class="cfg-sec-title">Supabase</div>
+        <div class="cfg-row">
+          <input id="cfg-url"  class="wide" value="https://xjmalpshawkejnusycti.supabase.co" />
+          <input id="cfg-anon" class="wide" value="sb_publishable_huOknmlKVQe9zEpSRdmMBg_kJtUrv1z" />
+        </div>
+        <div class="cfg-note">
+          Requires tables: <code>safe_state</code>, <code>safe_events</code>, <code>safe_commands</code>.
+          See setup SQL at the bottom of this file or in your project report.
+        </div>
+      </div>
+
+      <div class="cfg-sec">
+        <div class="cfg-sec-title">Google Gemini AI (Free)</div>
+        <div class="cfg-row">
+          <input id="cfg-gemini" type="password" class="wide" placeholder="Gemini API Key — AIza… (optional)" />
+          <button class="btn-connect" onclick="manualConnect()">Reconnect</button>
+          <button id="demo-btn" onclick="startDemoMode()">Demo Mode</button>
+        </div>
+        <div class="cfg-note">
+          Free key: <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a>
+          · Model: <strong>gemini-1.5-flash</strong> · 15 req/min, 1M tokens/day — no credit card needed.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS HERO -->
+  <div class="hero locked" id="hero">
+    <div class="state-left">
+      <div class="sdot locked" id="sdot"></div>
+      <div class="stxt">
+        <h2 class="sl" id="slbl">LOCKED</h2>
+        <p id="ssub">Secure · No active alerts</p>
+      </div>
+    </div>
+    <div class="smeta">
+      <div class="mi w"><div class="v" id="hw">—</div><div class="l">Weight (g)</div></div>
+      <div class="mi t"><div class="v" id="ht">—</div><div class="l">Temp °C</div></div>
+      <div class="mi h"><div class="v" id="hh">—</div><div class="l">Humidity %</div></div>
+    </div>
+  </div>
+
+  <!-- ROW 1 -->
+  <div class="grid g3 mgap">
+
+    <!-- Controls -->
+    <div class="card">
+      <div class="ct"><div class="dot"></div> Remote Control</div>
+      <div class="cbtns">
+        <button class="cbtn cu" onclick="sendCommand('UNLOCK')">🔓 Unlock Safe</button>
+        <button class="cbtn cl" onclick="sendCommand('LOCK')">🔒 Lock Safe</button>
+        <button class="cbtn cs" onclick="sendCommand('SILENCE')">🔕 Silence Alarm</button>
+      </div>
+      <div class="cmdst" id="cmdst">Awaiting command…</div>
+    </div>
+
+    <!-- Sensors -->
+    <div class="card">
+      <div class="ct"><div class="dot"></div> Live Sensor Readings</div>
+      <div class="sgrid">
+        <div class="si"><div class="sn">Hall Switch</div><div class="sv vg" id="s-hall">—</div><div class="ss">Door position</div></div>
+        <div class="si"><div class="sn">Shock Sensor</div><div class="sv vr" id="s-shock">—</div><div class="ss">Impact / tamper</div></div>
+        <div class="si"><div class="sn">Weight / FSR</div><div class="sv vb" id="s-wt">—</div><div class="ss">Grams inside</div></div>
+        <div class="si">
+          <div class="sn">Light Blocker</div>
+          <div class="sv vb" id="s-light">—</div>
+          <div class="beam" id="beam"><div class="beam-i"></div></div>
+        </div>
+        <div class="si"><div class="sn">Temperature</div><div class="sv vp" id="s-temp">—</div><div class="ss">DHT11 °C</div></div>
+        <div class="si"><div class="sn">Humidity</div><div class="sv vpu" id="s-humid">—</div><div class="ss">DHT11 %RH</div></div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card">
+      <div class="ct"><div class="dot"></div> Weight History (Last Hour)</div>
+      <div class="chart-wrap"><canvas id="wChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ROW 2 -->
+  <div class="grid g12">
+
+    <!-- AI Panel -->
+    <div class="card">
+      <div class="ct">
+        <div class="dot" style="background:var(--purple);box-shadow:0 0 6px var(--purple)"></div>
+        AI Threat Assessment
+      </div>
+      <div class="aipanel" id="aipanel">
+        <div class="ailabel">Gemini 2.0 Flash</div><br/>
+        <span class="aiempty">No tamper events. AI assessment appears automatically after a TAMPER event.</span>
+      </div>
+      <!-- RISK SCORE BAR -->
+      <div class="risk-wrap">
+        <div class="risk-title">
+          <span>AI INTRUSION RISK SCORE</span>
+          <span class="risk-pct" id="risk-pct" style="color:var(--text-muted)">—</span>
+        </div>
+        <div class="risk-track">
+          <div class="risk-fill" id="risk-fill"></div>
+        </div>
+        <div class="risk-level" id="risk-level" style="color:var(--text-muted)">Awaiting analysis…</div>
+      </div>
+
+      <!-- WEIGHT ANOMALY ALERT -->
+      <div class="anomaly-alert" id="anomaly-alert"></div>
+
+      <div class="aikey">
+        <span class="aikey-lbl">GEMINI KEY</span>
+        <input id="gemini-inline" type="password" placeholder="AIza… paste key to enable live AI" />
+        <a class="aikey-lnk" href="https://aistudio.google.com/app/apikey" target="_blank">Get free key ↗</a>
+      </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="card">
+      <div class="ct">
+        <div class="dot"></div> Event Log
+        <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-muted)" id="ecount">0 events</span>
+      </div>
+      <div style="display:grid;grid-template-columns:90px 1fr 80px;gap:12px;padding:0 14px 8px;font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border)">
+        <span>Timestamp</span><span>Event Type</span><span style="text-align:right">Δ Weight</span>
+      </div>
+      <div class="elog" id="elog"><div class="eempty">No events yet.</div></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span>SecureVault · CG2271 RTOS · 2025/26 S2</span>
+    <span id="lupdate">Last update: —</span>
+    <span>Supabase Realtime · Google Gemini 2.0 Flash</span>
+  </footer>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SUPABASE TABLE SETUP SQL (copy into Supabase SQL editor)        -->
+<!--                                                                 -->
+<!-- CREATE TABLE safe_state (                                        -->
+<!--   id SERIAL PRIMARY KEY,                                         -->
+<!--   state TEXT DEFAULT 'LOCKED',                                   -->
+<!--   weight INT DEFAULT 0,                                          -->
+<!--   temperature NUMERIC,                                           -->
+<!--   humidity NUMERIC,                                              -->
+<!--   light_blocked BOOLEAN DEFAULT FALSE,                           -->
+<!--   ai_assessment TEXT,                                            -->
+<!--   updated_at TIMESTAMPTZ DEFAULT NOW()                           -->
+<!-- );                                                               -->
+<!-- INSERT INTO safe_state (state) VALUES ('LOCKED');                -->
+<!--                                                                  -->
+<!-- CREATE TABLE safe_events (                                        -->
+<!--   id SERIAL PRIMARY KEY,                                          -->
+<!--   type TEXT NOT NULL,                                             -->
+<!--   weight_delta INT DEFAULT 0,                                     -->
+<!--   timestamp TEXT,                                                 -->
+<!--   created_at TIMESTAMPTZ DEFAULT NOW()                            -->
+<!-- );                                                               -->
+<!--                                                                  -->
+<!-- CREATE TABLE safe_commands (                                      -->
+<!--   id SERIAL PRIMARY KEY,                                          -->
+<!--   command TEXT NOT NULL,                                          -->
+<!--   created_at TIMESTAMPTZ DEFAULT NOW()                            -->
+<!-- );                                                               -->
+<!--                                                                  -->
+<!-- -- Enable realtime on both tables in Supabase dashboard          -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<script>
+// ──────────────────────────────────────────────────────────────────
+//  PRE-FILLED CREDENTIALS
+// ──────────────────────────────────────────────────────────────────
+const SUPA_URL  = 'https://xjmalpshawkejnusycti.supabase.co';
+const SUPA_ANON = 'sb_publishable_huOknmlKVQe9zEpSRdmMBg_kJtUrv1z';
+
+// ──────────────────────────────────────────────────────────────────
+//  STATE
+// ──────────────────────────────────────────────────────────────────
+let supa         = null;
+let chart        = null;
+let wHistory     = [];
+let demoEvents   = [];
+let demoTick     = 0;
+let demoWeight   = 0;
+let demoTimer    = null;
+let lastState    = '';
+let isDemo       = false;
+
+// ──────────────────────────────────────────────────────────────────
+//  CLOCK
+// ──────────────────────────────────────────────────────────────────
+setInterval(() => {
+  const d = new Date();
+  document.getElementById('clock').textContent =
+    [d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+}, 1000);
+
+// ──────────────────────────────────────────────────────────────────
+//  CHART INIT
+// ──────────────────────────────────────────────────────────────────
+function initChart() {
+  const ctx = document.getElementById('wChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type:'line',
+    data:{ labels:[], datasets:[{
+      label:'Weight (g)', data:[],
+      borderColor:'#29b6f6', backgroundColor:'rgba(41,182,246,0.08)',
+      borderWidth:2, tension:0.4, pointRadius:2, pointBackgroundColor:'#29b6f6', fill:true
+    }]},
+    options:{
+      animation:{duration:300}, responsive:true, maintainAspectRatio:false,
+      scales:{
+        x:{ticks:{color:'#3d5668',font:{family:'Share Tech Mono',size:10},maxTicksLimit:8},grid:{color:'#1e2d3a'}},
+        y:{ticks:{color:'#3d5668',font:{family:'Share Tech Mono',size:10}},grid:{color:'#1e2d3a'},min:0}
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#0d1318',borderColor:'#1e2d3a',borderWidth:1,titleColor:'#29b6f6',bodyColor:'#7a9ab0',
+          titleFont:{family:'Share Tech Mono'},bodyFont:{family:'Share Tech Mono'}}
+      }
+    }
+  });
+}
+
+function pushWeight(w) {
+  const d=new Date();
+  const lbl=[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+  wHistory.push({lbl,w});
+  if(wHistory.length>60)wHistory.shift();
+  chart.data.labels=wHistory.map(p=>p.lbl);
+  chart.data.datasets[0].data=wHistory.map(p=>p.w);
+  chart.update('none');
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  STATE RENDER
+// ──────────────────────────────────────────────────────────────────
+const STATES = {
+  LOCKED:  {cls:'locked', tc:'sl', dc:'locked', sub:'Secure · No active alerts'},
+  OPEN:    {cls:'open',   tc:'so', dc:'open',   sub:'Door open · Access in progress'},
+  TIMEOUT: {cls:'timeout',tc:'st', dc:'timeout',sub:'⚠ Door open too long!'},
+  TAMPER:  {cls:'tamper', tc:'sm', dc:'tamper', sub:'🚨 TAMPERING DETECTED'},
+};
+
+function renderState(state) {
+  const k = (state||'LOCKED').toUpperCase();
+  const c = STATES[k] || STATES.LOCKED;
+  document.getElementById('hero').className = `hero ${c.cls}`;
+  document.getElementById('sdot').className = `sdot ${c.dc}`;
+  const lbl = document.getElementById('slbl');
+  lbl.className=c.tc; lbl.textContent=k.replace('_',' ');
+  document.getElementById('ssub').textContent=c.sub;
+  if(k==='TAMPER') document.body.classList.add('tamper-active');
+  else             document.body.classList.remove('tamper-active');
+  // Gracefully decay risk score back to 0 when system returns to LOCKED
+  if(k==='LOCKED') animateRiskTo(0);
+  if(k==='TAMPER' && k!==lastState) callGemini();
+  lastState=k;
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  SENSOR RENDER
+// ──────────────────────────────────────────────────────────────────
+function renderSensors(d) {
+  const w  = d.weight      ?? 0;
+  const t  = d.temperature ?? '—';
+  const h  = d.humidity    ?? '—';
+  const lb = d.light_blocked;
+  const st = (d.state||'').toUpperCase();
+
+  document.getElementById('hw').textContent = w;
+  document.getElementById('ht').textContent = t!=='—' ? `${t}°` : '—';
+  document.getElementById('hh').textContent = h!=='—' ? `${h}%` : '—';
+  document.getElementById('s-wt').textContent   = w+'g';
+  document.getElementById('s-temp').textContent = t!=='—' ? `${t}°C` : '—';
+  document.getElementById('s-humid').textContent= h!=='—' ? `${h}%`  : '—';
+
+  const doorOpen = st==='OPEN'||st==='TIMEOUT';
+  const hallEl=document.getElementById('s-hall');
+  hallEl.textContent=doorOpen?'OPEN':'CLOSED';
+  hallEl.className=`sv ${doorOpen?'va':'vg'}`;
+
+  const shockEl=document.getElementById('s-shock');
+  shockEl.textContent=st==='TAMPER'?'TRIGGERED':'CLEAR';
+  shockEl.className=`sv ${st==='TAMPER'?'vr':'vg'}`;
+
+  const lightEl=document.getElementById('s-light');
+  const beamEl=document.getElementById('beam');
+  if(lb){lightEl.textContent='BROKEN';lightEl.className='sv va';beamEl.classList.add('broken');}
+  else   {lightEl.textContent='INTACT';lightEl.className='sv vb';beamEl.classList.remove('broken');}
+
+  pushWeight(w);
+  checkWeightAnomaly(w);
+  document.getElementById('lupdate').textContent=`Last update: ${new Date().toLocaleTimeString()}`;
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  EVENT LOG RENDER
+// ──────────────────────────────────────────────────────────────────
+function renderEvents(arr) {
+  const c=document.getElementById('elog');
+  if(!arr||arr.length===0){c.innerHTML='<div class="eempty">No events yet.</div>';document.getElementById('ecount').textContent='0 events';return;}
+  const s=[...arr].sort((a,b)=>(b.created_at||b.timestamp||'')>(a.created_at||a.timestamp||'')?1:-1).slice(0,100);
+  document.getElementById('ecount').textContent=`${s.length} events`;
+  c.innerHTML=s.map(ev=>{
+    const type=(ev.type||'EVENT').toUpperCase().replace(/\s/g,'_');
+    const ts=ev.timestamp||'—';
+    const delta=ev.weight_delta!=null?(ev.weight_delta>=0?`+${ev.weight_delta}g`:`${ev.weight_delta}g`):'—';
+    return`<div class="erow"><span class="ets">${ts}</span><span class="e${type}">${type.replace(/_/g,' ')}</span><span style="text-align:right">${delta}</span></div>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  GEMINI AI CALL
+// ──────────────────────────────────────────────────────────────────
+function geminiKey() {
+  return (document.getElementById('cfg-gemini')?.value||'').trim()
+      || (document.getElementById('gemini-inline')?.value||'').trim();
+}
+
+function setAIThinking() {
+  document.getElementById('aipanel').innerHTML=
+    `<div class="ailabel">Gemini 2.0 Flash</div><br/><div class="aithink"><span></span><span></span><span></span> Analysing tamper event…</div>`;
+  updateRiskScore(40, 'ANALYSING…'); // amber "thinking" state
+}
+function setAI(html) {
+  document.getElementById('aipanel').innerHTML=`<div class="ailabel">Gemini 2.0 Flash</div><br/>${html}`;
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  RISK SCORE ENGINE
+// ──────────────────────────────────────────────────────────────────
+let riskAnimFrame = null;
+
+function updateRiskScore(score, labelOverride) {
+  score = Math.max(0, Math.min(100, score));
+  const fill = document.getElementById('risk-fill');
+  const pct  = document.getElementById('risk-pct');
+  const lvl  = document.getElementById('risk-level');
+  if(!fill) return;
+
+  fill.style.width = score + '%';
+
+  let level, color, glow;
+  if(score === 0)       { level='CLEAR';     color='var(--text-muted)'; glow='none'; fill.style.background='var(--border2)'; }
+  else if(score <= 30)  { level='LOW';       color='var(--green)';      glow='0 0 8px #00e67650'; fill.style.background='var(--green)'; }
+  else if(score <= 65)  { level='MEDIUM';    color='var(--amber)';      glow='0 0 8px #ffa72650'; fill.style.background='var(--amber)'; }
+  else                  { level='HIGH';      color='var(--red)';        glow='0 0 10px #ff3d3d60'; fill.style.background='var(--red)'; }
+
+  fill.style.boxShadow = glow;
+  pct.style.color  = color;
+  lvl.style.color  = color;
+  pct.textContent  = score === 0 ? '—' : `${score}%`;
+  lvl.textContent  = labelOverride || (score === 0 ? 'Awaiting analysis…' : `${level} RISK — ${score}% intrusion probability`);
+}
+
+function animateRiskTo(target) {
+  // Smoothly animate the current score down to target (used for LOCKED reset)
+  if(riskAnimFrame) cancelAnimationFrame(riskAnimFrame);
+  const fill = document.getElementById('risk-fill');
+  if(!fill) return;
+  const current = parseFloat(fill.style.width) || 0;
+  if(current === target) return;
+  const step = current > target ? -1 : 1;
+  let val = current;
+  function tick() {
+    val += step;
+    updateRiskScore(Math.round(val));
+    if((step > 0 && val < target) || (step < 0 && val > target)) {
+      riskAnimFrame = requestAnimationFrame(tick);
+    } else {
+      updateRiskScore(target);
+    }
+  }
+  riskAnimFrame = requestAnimationFrame(tick);
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  WEIGHT ANOMALY DETECTION
+// ──────────────────────────────────────────────────────────────────
+let prevWeight = null;
+const ANOMALY_THRESHOLD = 150; // grams — sudden drop suggests item removed while locked
+
+function checkWeightAnomaly(w) {
+  const alertEl = document.getElementById('anomaly-alert');
+  if(!alertEl) return;
+
+  if(prevWeight !== null && lastState === 'LOCKED') {
+    const delta = w - prevWeight;
+    if(delta <= -ANOMALY_THRESHOLD) {
+      // Significant weight drop while locked = possible item theft
+      alertEl.textContent = `⚠ ANOMALY: Weight dropped ${Math.abs(delta)}g while safe is LOCKED — possible item removed without authorisation.`;
+      alertEl.classList.add('show');
+      // Bump risk score if not already high
+      const currentScore = parseFloat(document.getElementById('risk-fill')?.style.width||'0');
+      if(currentScore < 70) updateRiskScore(70);
+    } else if(delta >= ANOMALY_THRESHOLD) {
+      // Large weight increase while locked = something placed inside (unusual)
+      alertEl.textContent = `⚠ ANOMALY: Weight increased +${delta}g while safe is LOCKED — unexpected item detected inside.`;
+      alertEl.classList.add('show');
+    } else if(lastState === 'LOCKED' && delta === 0) {
+      alertEl.classList.remove('show');
+    }
+  }
+  prevWeight = w;
+}
+
+async function callGemini() {
+  const key=geminiKey();
+  if(!key){
+    setAI(`<span class="aiempty">⚠ TAMPER detected — paste a Gemini API key below to enable AI threat assessment.</span>`);
+    updateRiskScore(60, 'KEY REQUIRED — estimated MEDIUM risk');
+    return;
+  }
+  setAIThinking(); // shows amber 40% bar
+
+  // Collect recent events
+  let recent=[];
+  try {
+    if(supa && !isDemo){
+      const {data}=await supa.from('safe_events').select('type,weight_delta,timestamp').order('created_at',{ascending:false}).limit(5);
+      if(data) recent=data;
+    } else {
+      recent=demoEvents.slice(0,5);
+    }
+  } catch(e){}
+
+  const evJson=JSON.stringify(recent.length ? recent : [{type:'TAMPER',weight_delta:0,timestamp:'—'}]);
+
+  // Build rich sensor context (improvement 2: full sensor state)
+  const sensorContext = {
+    state:       lastState,
+    weight_g:    document.getElementById('hw').textContent,
+    temperature: document.getElementById('ht').textContent,
+    humidity:    document.getElementById('hh').textContent,
+    light_beam:  document.getElementById('s-light').textContent,
+    shock:       document.getElementById('s-shock').textContent,
+    door:        document.getElementById('s-hall').textContent,
+  };
+
+  const prompt=`You are a security analyst monitoring a smart safe IoT system.
+Current sensor readings: ${JSON.stringify(sensorContext)}
+Last ${recent.length||1} events (newest first): ${evJson}
+
+The safe just triggered a TAMPER alert — shock sensor fired while the door was LOCKED.
+
+Respond in exactly 2 sentences:
+1. Whether this is a real intrusion attempt or likely accidental vibration, and why.
+2. The single most important immediate action for the owner.
+Plain text only — no markdown, no bullet points.`;
+
+  try {
+    const res=await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${key}`,
+      {method:'POST',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:180,temperature:0.35}})}
+    );
+    if(!res.ok){
+      const e=await res.json();
+      setAI(`<span style="color:var(--red)">⚠ Gemini error: ${e?.error?.message||'HTTP '+res.status}</span>`);
+      updateRiskScore(50, 'ERROR — score unavailable');
+      return;
+    }
+    const j=await res.json();
+    const txt=j?.candidates?.[0]?.content?.parts?.[0]?.text||'No response.';
+
+    // ── Compute risk score from AI response text ──
+    let risk = 50;
+    if(/intrusion|forced|break.?in|genuine|serious|criminal|breach/i.test(txt))      risk = 85;
+    else if(/unlikely|false.?alarm|accidental|vibration|no immediate/i.test(txt))    risk = 15;
+    // Extra signal: if beam was broken + weight changed, raise score
+    if(sensorContext.light_beam === 'BROKEN')   risk = Math.min(100, risk + 10);
+    if(recent.some(e => e.weight_delta && Math.abs(e.weight_delta) > 50)) risk = Math.min(100, risk + 10);
+    updateRiskScore(risk);
+
+    // Colour-code key words in response
+    const html=txt
+      .replace(/(intrusion|forced|break-in|genuine|immediate|serious|inspect|criminal|breach)/gi,'<strong style="color:var(--red)">$1</strong>')
+      .replace(/(false alarm|vibration|accidental|unlikely|no immediate)/gi,'<strong style="color:var(--amber)">$1</strong>');
+    setAI(html);
+
+    // Persist to Supabase
+    if(supa && !isDemo){
+      supa.from('safe_state').update({ai_assessment:txt}).neq('id',0).then(()=>{});
+    }
+  } catch(e){
+    setAI(`<span style="color:var(--red)">⚠ Network error: ${e.message}</span>`);
+    updateRiskScore(50, 'ERROR — score unavailable');
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  COMMAND SENDER → Supabase safe_commands
+// ──────────────────────────────────────────────────────────────────
+async function sendCommand(cmd) {
+  const el=document.getElementById('cmdst');
+  el.className='cmdst'; el.textContent=`Sending ${cmd}…`;
+  if(isDemo||!supa){
+    el.className='cmdst ok'; el.textContent=`✓ CMD:${cmd} (demo — simulated)`;
+    addDemoEvent(cmd,0); return;
+  }
+  try {
+    const {error}=await supa.from('safe_commands').insert({command:cmd});
+    if(error) throw error;
+    el.className='cmdst ok'; el.textContent=`✓ CMD:${cmd} sent to Supabase`;
+  } catch(e){
+    el.className='cmdst err'; el.textContent=`✗ Error: ${e.message}`;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  SUPABASE CONNECT + REALTIME
+// ──────────────────────────────────────────────────────────────────
+async function connectSupabase(url, anon) {
+  supa = window.supabase.createClient(url, anon);
+
+  // Fetch initial state
+  const {data:stData, error:stErr} = await supa.from('safe_state').select('*').order('updated_at',{ascending:false}).limit(1).single();
+  if(stErr) throw new Error(stErr.message);
+  renderState(stData.state);
+  renderSensors(stData);
+
+  // Fetch events
+  const {data:evData} = await supa.from('safe_events').select('*').order('created_at',{ascending:false}).limit(100);
+  renderEvents(evData||[]);
+
+  // Realtime: state changes
+  supa.channel('rt-state')
+    .on('postgres_changes',{event:'*',schema:'public',table:'safe_state'}, p => {
+      const d=p.new||{};
+      renderState(d.state);
+      renderSensors(d);
+      if(d.ai_assessment) setAI(d.ai_assessment);
+    })
+    .subscribe();
+
+  // Realtime: new events
+  supa.channel('rt-events')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'safe_events'}, async () => {
+      const {data}=await supa.from('safe_events').select('*').order('created_at',{ascending:false}).limit(100);
+      renderEvents(data||[]);
+    })
+    .subscribe();
+}
+
+function setConnected(mode) {
+  const dot=document.getElementById('conn-dot');
+  const lbl=document.getElementById('conn-label');
+  if(mode==='live'){dot.className='conn-dot live';lbl.textContent='CONNECTED';lbl.style.color='var(--green)';}
+  else             {dot.className='conn-dot demo';lbl.textContent='DEMO MODE'; lbl.style.color='var(--amber)';}
+}
+
+function manualConnect() {
+  const url  = document.getElementById('cfg-url').value.trim()  || SUPA_URL;
+  const anon = document.getElementById('cfg-anon').value.trim() || SUPA_ANON;
+  const gk   = document.getElementById('cfg-gemini').value.trim();
+  if(gk) document.getElementById('gemini-inline').value=gk;
+  document.getElementById('cfg-banner').style.display='none';
+  isDemo=false;
+  connectSupabase(url,anon)
+    .then(()=>setConnected('live'))
+    .catch(e=>{ alert('Connection error: '+e.message); document.getElementById('cfg-banner').style.display='flex'; });
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  DEMO MODE
+// ──────────────────────────────────────────────────────────────────
+const D_STATES=['LOCKED','LOCKED','LOCKED','OPEN','LOCKED','TAMPER','LOCKED','TIMEOUT'];
+const D_EVTS=['DOOR_OPEN','ITEM_ADDED','ITEM_REMOVED','TAMPER','DOOR_CLOSE','LOCKED','UNLOCKED'];
+
+function addDemoEvent(type,delta) {
+  const d=new Date();
+  const ts=[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+  demoEvents.unshift({type,timestamp:ts,weight_delta:delta??0,created_at:new Date().toISOString()});
+  if(demoEvents.length>50) demoEvents.pop();
+  renderEvents(demoEvents);
+}
+
+function startDemoMode() {
+  isDemo=true;
+  document.getElementById('cfg-banner').style.display='none';
+  setConnected('demo');
+  const gk=document.getElementById('cfg-gemini')?.value.trim();
+  if(gk) document.getElementById('gemini-inline').value=gk;
+  renderState('LOCKED');
+  renderSensors({state:'LOCKED',weight:0,temperature:27,humidity:62,light_blocked:false});
+  document.getElementById('aipanel').innerHTML=
+    `<div class="ailabel">Gemini 2.0 Flash</div><br/><span class="aiempty">Add a Gemini key below, then wait for a TAMPER state to trigger live AI analysis.</span>`;
+  document.getElementById('cmdst').textContent='Demo mode — commands simulated locally.';
+
+  if(demoTimer) clearInterval(demoTimer);
+  demoTick=0; demoWeight=0;
+  demoTimer=setInterval(()=>{
+    demoTick++;
+    demoWeight=Math.max(0,demoWeight+(Math.random()>.5?Math.random()*30:-Math.random()*15));
+    const w=Math.round(demoWeight), t=+(26+Math.random()*4).toFixed(1), h=Math.round(58+Math.random()*12), lb=Math.random()>.85;
+    const state=D_STATES[Math.floor(demoTick/10)%D_STATES.length];
+    renderState(state);
+    renderSensors({state,weight:w,temperature:t,humidity:h,light_blocked:lb});
+    if(demoTick%7===0){
+      const type=D_EVTS[Math.floor(Math.random()*D_EVTS.length)];
+      const delta=type==='ITEM_ADDED'?Math.round(50+Math.random()*200):type==='ITEM_REMOVED'?-Math.round(50+Math.random()*200):0;
+      addDemoEvent(type,delta);
+    }
+  },1500);
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  AUTO-CONNECT ON LOAD
+// ──────────────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  initChart();
+  setTimeout(()=>{
+    connectSupabase(SUPA_URL, SUPA_ANON)
+      .then(()=>{
+        setConnected('live');
+        document.getElementById('cfg-banner').style.display='none';
+      })
+      .catch(()=>{
+        // Show banner so user can fix or use demo mode
+        document.getElementById('cfg-banner').style.display='flex';
+        document.getElementById('conn-dot').className='conn-dot';
+        document.getElementById('conn-label').textContent='DISCONNECTED';
+      });
+  },500);
+});
+</script>
+</body>
+</html>

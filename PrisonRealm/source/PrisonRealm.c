@@ -41,14 +41,22 @@ typedef enum {
 typedef struct {
 	SensorType sensor;
 	int32_t value;
-} SensorData;
+} TSensorData;
 
 #define REED_PIN 1 // PTA 1
+#define DOOR_OPEN 0
+#define DOOR_CLOSED 1
+
 #define QLEN	5
-QueueHandle_t queue;
+
+TaskHandle_t reedTaskHandle;
+
 typedef struct tm {
 	char message[MAX_MSG_LEN];
 } TMessage;
+
+QueueHandle_t queue;
+QueueHandle_t sensorDataQueue;
 
 void initUART2(uint32_t baud_rate) {
 	NVIC_DisableIRQ(UART2_FLEXIO_IRQn);
@@ -147,6 +155,8 @@ void initReed() {
 	// Enable pull-up
 	PORTA->PCR[REED_PIN] &= ~PORT_PCR_PS_MASK;
 	PORTA->PCR[REED_PIN] |= PORT_PCR_PS(1);
+	PORTA->PCR[REED_PIN] &= ~PORT_PCR_PE_MASK;
+	PORTA->PCR[REED_PIN] |= PORT_PCR_PE(1);
 
 	// Set as GPIO
 	PORTA->PCR[REED_PIN] &= ~PORT_PCR_MUX_MASK;
@@ -156,11 +166,59 @@ void initReed() {
 	GPIOA->PDDR &= ~(1 << REED_PIN);
 
 	// Enable interrupt on BOTH edges
-	PORTA->PCR[REED_PIN] &= PORT_PCR_IRQC(0b1011);
+	PORTA->PCR[REED_PIN] &= ~PORT_PCR_IRQC_MASK;
+	PORTA->PCR[REED_PIN] |= PORT_PCR_IRQC(0b1011);
 
 	NVIC_SetPriority(PORTA_IRQn, 192);
 	NVIC_ClearPendingIRQ(PORTA_IRQn);
 	NVIC_EnableIRQ(PORTA_IRQn);
+}
+
+void PORTA_IRQHandler() {
+	NVIC_ClearPendingIRQ(PORTA_IRQn);
+
+	// REED
+	if (PORTA->ISFR & (1 << REED_PIN)) {
+		uint32_t event;
+		// Check if rising or falling edge
+		if (GPIOA->PDIR & (1 << REED_PIN)) {
+			// Pin is 1, rising edge
+			event = DOOR_OPEN;
+		} else {
+			// Falling edge
+			event = DOOR_CLOSED;
+		}
+		BaseType_t hpw = pdFALSE;
+		xTaskNotifyFromISR(reedTaskHandle, event, eSetValueWithOverwrite, &hpw);
+		portYIELD_FROM_ISR(hpw);
+	}
+
+	PORTA->ISFR |= (1 << REED_PIN);
+}
+
+static void reedTask(void *p) {
+	while (1) {
+		uint32_t event;
+		xTaskNotifyWait(0, 0xFFFFFFFF, &event, portMAX_DELAY);
+		TSensorData reedData;
+		reedData.sensor = SENSOR_REED;
+		if (event == DOOR_CLOSED) {
+			reedData.value = DOOR_CLOSED;
+		} else if (event == DOOR_OPEN) {
+			reedData.value = DOOR_OPEN;
+		}
+		xQueueSend(sensorDataQueue, &reedData, portMAX_DELAY);
+	}
+}
+
+static void sendSensorDataTask(void *p) {
+	while (1) {
+		TSensorData sensorData;
+		if (xQueueReceive(sensorDataQueue, &sensorData, portMAX_DELAY) == pdTRUE) {
+			PRINTF("{\"sensor\":%d, \"value\":%d}\r\n", (int32_t) sensorData.sensor,
+					sensorData.value);
+		}
+	}
 }
 
 void sendMessage(char *message) {
@@ -204,12 +262,19 @@ int main(void) {
 #endif
 
 	initUART2(9600);
+	initReed();
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
+	sensorDataQueue = xQueueCreate(QLEN, sizeof(TSensorData));
+
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
 	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
+	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
+			&reedTaskHandle);
+	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
+			configMINIMAL_STACK_SIZE + 100, NULL, 3, NULL);
 	vTaskStartScheduler();
 
 	/* Force the counter to be placed into memory. */

@@ -22,7 +22,7 @@
 #include "queue.h"
 
 /* TODO: insert other definitions and declarations here. */
-
+/* UART */
 #define BAUD_RATE 9600
 #define UART_TX_PTE22 	22
 #define UART_RX_PTE23 	23
@@ -33,6 +33,8 @@ char send_buffer[MAX_MSG_LEN];
 
 #define READ_DELAY 2000
 
+/* Sensors */
+#define REED_PIN 1 // PTA 1
 #define QLEN	5
 QueueHandle_t queue;
 typedef struct tm {
@@ -127,6 +129,29 @@ void UART2_FLEXIO_IRQHandler(void) {
 		}
 	}
 
+}
+
+void initReed() {
+	NVIC_DisableIRQ(PORTA_IRQn);
+	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
+
+	// Enable pull-up
+	PORTA->PCR[REED_PIN] &= ~PORT_PCR_PS_MASK;
+	PORTA->PCR[REED_PIN] |= PORT_PCR_PS(1);
+
+	// Set as GPIO
+	PORTA->PCR[REED_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTA->PCR[REED_PIN] |= PORT_PCR_MUX(1);
+
+	// Set as input
+	GPIOA->PDDR &= ~(1 << REED_PIN);
+
+	// Enable interrupt on BOTH edges
+	PORTA->PCR[REED_PIN] &= PORT_PCR_IRQC(0b1011);
+
+	NVIC_SetPriority(PORTA_IRQn, 192);
+	NVIC_ClearPendingIRQ(PORTA_IRQn);
+	NVIC_EnableIRQ(PORTA_IRQn);
 }
 
 void sendMessage(char *message) {

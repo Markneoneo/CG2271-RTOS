@@ -34,6 +34,15 @@ char send_buffer[MAX_MSG_LEN];
 #define READ_DELAY 2000
 
 /* Sensors */
+typedef enum {
+	SENSOR_REED = 0,
+} SensorType;
+
+typedef struct {
+	SensorType sensor;
+	int32_t value;
+} SensorData;
+
 #define REED_PIN 1 // PTA 1
 #define QLEN	5
 QueueHandle_t queue;

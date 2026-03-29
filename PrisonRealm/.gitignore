@@ -1,0 +1,8 @@
+# Build output
+/Debug/
+
+# IDE settings
+/.settings/
+
+# NXP config cache
+*.mex

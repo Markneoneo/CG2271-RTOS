@@ -57,6 +57,7 @@ typedef struct tm {
 
 QueueHandle_t queue;
 QueueHandle_t sensorDataQueue;
+QueueHandle_t msgQueue; // UART Out
 
 void initUART2(uint32_t baud_rate) {
 	NVIC_DisableIRQ(UART2_FLEXIO_IRQn);
@@ -199,6 +200,8 @@ void PORTA_IRQHandler() {
 static void reedTask(void *p) {
 	while (1) {
 		uint32_t event;
+
+		// Clear all bits on exit
 		xTaskNotifyWait(0, 0xFFFFFFFF, &event, portMAX_DELAY);
 		TSensorData reedData;
 		reedData.sensor = SENSOR_REED;
@@ -215,8 +218,11 @@ static void sendSensorDataTask(void *p) {
 	while (1) {
 		TSensorData sensorData;
 		if (xQueueReceive(sensorDataQueue, &sensorData, portMAX_DELAY) == pdTRUE) {
-			PRINTF("{\"sensor\":%d, \"value\":%d}\r\n", (int32_t) sensorData.sensor,
-					sensorData.value);
+			TMessage msg;
+			snprintf(msg.message, MAX_MSG_LEN, "{\"sensor\":%d, \"value\":%d}\r\n",
+					(int32_t) sensorData.sensor, sensorData.value);
+			PRINTF("%s", msg.message);
+			xQueueSend(msgQueue, &msg, portMAX_DELAY);
 		}
 	}
 }
@@ -240,11 +246,11 @@ static void recvTask(void *p) {
 }
 
 static void sendTask(void *p) {
-	char buffer[MAX_MSG_LEN];
 	while (1) {
-		sprintf(buffer, "Read Value");
-		sendMessage(buffer);
-		vTaskDelay(pdMS_TO_TICKS(READ_DELAY));
+		TMessage msg;
+		if (xQueueReceive(msgQueue, &msg, portMAX_DELAY) == pdTRUE) {
+			sendMessage(msg.message);
+		}
 	}
 }
 /*
@@ -274,7 +280,7 @@ int main(void) {
 	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 			&reedTaskHandle);
 	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
-			configMINIMAL_STACK_SIZE + 100, NULL, 3, NULL);
+	configMINIMAL_STACK_SIZE + 100, NULL, 3, NULL);
 	vTaskStartScheduler();
 
 	/* Force the counter to be placed into memory. */

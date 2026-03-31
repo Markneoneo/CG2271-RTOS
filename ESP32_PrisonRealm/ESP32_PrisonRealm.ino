@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include "env.h"
+#include "secrets.h"
 
 Supabase db;
 const char *supabase_url = SUPABASE_URL;

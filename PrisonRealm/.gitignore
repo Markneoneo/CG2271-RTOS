@@ -6,3 +6,6 @@
 
 # NXP config cache
 *.mex
+
+# Debug
+*.launch

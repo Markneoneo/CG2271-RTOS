@@ -20,6 +20,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
+#include "timers.h"
 
 /* TODO: insert other definitions and declarations here. */
 /* UART */
@@ -58,6 +59,8 @@ typedef struct tm {
 QueueHandle_t queue;
 QueueHandle_t sensorDataQueue;
 QueueHandle_t msgQueue; // UART Out
+
+TimerHandle_t reedDebounceTimer;
 
 void initUART2(uint32_t baud_rate) {
 	NVIC_DisableIRQ(UART2_FLEXIO_IRQn);
@@ -180,21 +183,25 @@ void PORTA_IRQHandler() {
 
 	// REED
 	if (PORTA->ISFR & (1 << REED_PIN)) {
-		uint32_t event;
-		// Check if rising or falling edge
-		if (GPIOA->PDIR & (1 << REED_PIN)) {
-			// Pin is 1, rising edge
-			event = DOOR_OPEN;
-		} else {
-			// Falling edge
-			event = DOOR_CLOSED;
-		}
 		BaseType_t hpw = pdFALSE;
-		xTaskNotifyFromISR(reedTaskHandle, event, eSetValueWithOverwrite, &hpw);
+		xTimerStartFromISR(reedDebounceTimer, &hpw);
 		portYIELD_FROM_ISR(hpw);
 	}
 
 	PORTA->ISFR |= (1 << REED_PIN);
+}
+
+void reedDebouncedCallback(TimerHandle_t xTimer) {
+	uint32_t event;
+	// Check if rising or falling edge
+	if (GPIOA->PDIR & (1 << REED_PIN)) {
+		// Pin is 1, rising edge
+		event = DOOR_OPEN;
+	} else {
+		// Falling edge
+		event = DOOR_CLOSED;
+	}
+	xTaskNotify(reedTaskHandle, event, eSetValueWithOverwrite);
 }
 
 static void reedTask(void *p) {
@@ -219,7 +226,8 @@ static void sendSensorDataTask(void *p) {
 		TSensorData sensorData;
 		if (xQueueReceive(sensorDataQueue, &sensorData, portMAX_DELAY) == pdTRUE) {
 			TMessage msg;
-			snprintf(msg.message, MAX_MSG_LEN, "{\"sensor\":%d, \"value\":%d}\r\n",
+			snprintf(msg.message, MAX_MSG_LEN,
+					"{\"sensor\":%d, \"value\":%d}\r\n",
 					(int32_t) sensorData.sensor, sensorData.value);
 			PRINTF("%s", msg.message);
 			xQueueSend(msgQueue, &msg, portMAX_DELAY);
@@ -271,7 +279,11 @@ int main(void) {
 	initReed();
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
+	msgQueue = xQueueCreate(QLEN, sizeof(TMessage));
 	sensorDataQueue = xQueueCreate(QLEN, sizeof(TSensorData));
+
+	reedDebounceTimer = xTimerCreate("Debounce Timer", pdMS_TO_TICKS(50), pdFALSE,
+			NULL, reedDebouncedCallback);
 
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
@@ -281,6 +293,7 @@ int main(void) {
 			&reedTaskHandle);
 	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
 	configMINIMAL_STACK_SIZE + 100, NULL, 3, NULL);
+
 	vTaskStartScheduler();
 
 	/* Force the counter to be placed into memory. */

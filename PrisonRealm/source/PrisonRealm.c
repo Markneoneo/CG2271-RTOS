@@ -275,7 +275,7 @@ int main(void) {
 	BOARD_InitDebugConsole();
 #endif
 
-	initUART2(9600);
+	initUART2(115200);
 	initReed();
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));

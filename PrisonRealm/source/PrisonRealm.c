@@ -212,11 +212,19 @@ static void reedTask(void *p) {
 		xTaskNotifyWait(0, 0xFFFFFFFF, &event, portMAX_DELAY);
 		TSensorData reedData;
 		reedData.sensor = SENSOR_REED;
-		if (event == DOOR_CLOSED) {
+
+		// Actions
+		switch (event) {
+		case DOOR_CLOSED:
 			reedData.value = DOOR_CLOSED;
-		} else if (event == DOOR_OPEN) {
+			break;
+		case DOOR_OPEN:
 			reedData.value = DOOR_OPEN;
+			break;
+		default:
+			break;
 		}
+
 		xQueueSend(sensorDataQueue, &reedData, portMAX_DELAY);
 	}
 }

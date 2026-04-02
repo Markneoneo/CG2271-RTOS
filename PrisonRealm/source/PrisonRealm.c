@@ -21,6 +21,7 @@
 #include "task.h"
 #include "queue.h"
 #include "timers.h"
+#include <semphr.h>
 
 /* TODO: insert other definitions and declarations here. */
 /* UART */
@@ -47,7 +48,7 @@ typedef struct {
 #define REED_PIN 1 // PTA 1
 #define DOOR_OPEN 0
 #define DOOR_CLOSED 1
-
+#define TIMER_DELAY 2000 // 2s or 2000 ms
 #define QLEN	5
 
 TaskHandle_t reedTaskHandle;
@@ -61,7 +62,9 @@ QueueHandle_t sensorDataQueue;
 QueueHandle_t msgQueue; // UART Out
 
 TimerHandle_t reedDebounceTimer;
+TimerHandle_t reedAlarmTimer;
 
+SemaphoreHandle_t alarmTriggered;
 void initUART2(uint32_t baud_rate) {
 	NVIC_DisableIRQ(UART2_FLEXIO_IRQn);
 
@@ -196,10 +199,10 @@ void reedDebouncedCallback(TimerHandle_t xTimer) {
 	// Check if rising or falling edge
 	if (GPIOA->PDIR & (1 << REED_PIN)) {
 		// Pin is 1, rising edge
-		event = DOOR_OPEN;
+		event = DOOR_CLOSED;
 	} else {
 		// Falling edge
-		event = DOOR_CLOSED;
+		event = DOOR_OPEN;
 	}
 	xTaskNotify(reedTaskHandle, event, eSetValueWithOverwrite);
 }
@@ -216,9 +219,11 @@ static void reedTask(void *p) {
 		// Actions
 		switch (event) {
 		case DOOR_CLOSED:
+			xTimerStop(reedAlarmTimer, 0);
 			reedData.value = DOOR_CLOSED;
 			break;
 		case DOOR_OPEN:
+			xTimerStart(reedAlarmTimer, 0);
 			reedData.value = DOOR_OPEN;
 			break;
 		default:
@@ -226,6 +231,18 @@ static void reedTask(void *p) {
 		}
 
 		xQueueSend(sensorDataQueue, &reedData, portMAX_DELAY);
+	}
+}
+
+void reedAlarmCallback(TimerHandle_t xTimer) {
+	xSemaphoreGive(alarmTriggered);
+}
+
+static void alarmTask(void *p) {
+	while (1) {
+		if (xSemaphoreTake(alarmTriggered, portMAX_DELAY) == pdTRUE) {
+			PRINTF("Timer has gone off\r\n");
+		}
 	}
 }
 
@@ -290,8 +307,13 @@ int main(void) {
 	msgQueue = xQueueCreate(QLEN, sizeof(TMessage));
 	sensorDataQueue = xQueueCreate(QLEN, sizeof(TSensorData));
 
-	reedDebounceTimer = xTimerCreate("Debounce Timer", pdMS_TO_TICKS(50), pdFALSE,
-			NULL, reedDebouncedCallback);
+	reedDebounceTimer = xTimerCreate("Debounce Timer", pdMS_TO_TICKS(50),
+	pdFALSE,
+	NULL, reedDebouncedCallback);
+	reedAlarmTimer = xTimerCreate("Alarm Timer", pdMS_TO_TICKS(TIMER_DELAY),
+	pdFALSE, NULL, reedAlarmCallback);
+
+	alarmTriggered = xSemaphoreCreateBinary();
 
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
@@ -299,6 +321,8 @@ int main(void) {
 	NULL);
 	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 			&reedTaskHandle);
+	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 100, NULL, 3,
+			NULL);
 	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
 	configMINIMAL_STACK_SIZE + 100, NULL, 3, NULL);
 

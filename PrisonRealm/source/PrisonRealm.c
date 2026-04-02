@@ -21,6 +21,7 @@
 #include "task.h"
 #include "queue.h"
 #include "timers.h"
+#include <semphr.h>
 
 #include "servo.h"
 
@@ -33,9 +34,9 @@
 #define MAX_MSG_LEN		256
 char send_buffer[MAX_MSG_LEN];
 
-#define READ_DELAY 2000
-
 /* Sensors */
+
+// Sensor data structs
 typedef enum {
 	SENSOR_REED = 0,
 	SENSOR_HX711,
@@ -46,16 +47,20 @@ typedef struct {
 	int32_t value;
 } TSensorData;
 
+// Reed Sensor and Buzzer
 #define REED_PIN        1 // PTA 1
+#define BUZZER_PIN      12 // PTA12
+#define DOOR_OPEN   0
+#define DOOR_CLOSED 1
+#define TIMER_DELAY 2000 // 2s or 2000 ms
+
+// Load Cell
 #define HX711_DOUT_PIN  4 // PTA 4
 #define HX711_SCK_PIN   5 // PTA 5
 #define HX711_N         20 // Averaged readings
 
 const int32_t HX711_OFFSET = 576950;
 const int32_t HX711_SCALE  = 398;
-
-#define DOOR_OPEN   0
-#define DOOR_CLOSED 1
 
 #define QLEN	5
 
@@ -70,7 +75,9 @@ QueueHandle_t sensorDataQueue;
 QueueHandle_t msgQueue; // UART Out
 
 TimerHandle_t reedDebounceTimer;
+TimerHandle_t reedAlarmTimer;
 
+SemaphoreHandle_t alarmTriggered;
 void initUART2(uint32_t baud_rate) {
 	NVIC_DisableIRQ(UART2_FLEXIO_IRQn);
 
@@ -186,11 +193,21 @@ void initReed() {
 	NVIC_EnableIRQ(PORTA_IRQn);
 }
 
+void initBuzzer() {
+	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
+
+	// Set as GPIO
+	PORTA->PCR[BUZZER_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTA->PCR[BUZZER_PIN] |= PORT_PCR_MUX(1);
+
+	// Set as output
+	GPIOA->PDDR |= (1 << BUZZER_PIN);
+}
+
 void initHX711() {
 	// DOUT is HIGH when data is not ready.
 	// SCK should be set to LOW. When DOUT goes low, pulse SCK 25 times to read in 24 bits.
 	// DOUT will go back HIGH on the 25th pulse.
-	NVIC_DisableIRQ(PORTA_IRQn);
 	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
 
 	// Set as GPIO
@@ -205,10 +222,6 @@ void initHX711() {
 
 	// Set SCK LOW
 	GPIOA->PCOR |= (1 << HX711_SCK_PIN);
-
-	// Priority already set in InitReed, and this will be polling
-	NVIC_ClearPendingIRQ(PORTA_IRQn);
-	NVIC_EnableIRQ(PORTA_IRQn);
 }
 
 static inline bool hx711IsReady(void) {
@@ -292,10 +305,10 @@ void reedDebouncedCallback(TimerHandle_t xTimer) {
 	// Check if rising or falling edge
 	if (GPIOA->PDIR & (1 << REED_PIN)) {
 		// Pin is 1, rising edge
-		event = DOOR_OPEN;
+		event = DOOR_CLOSED;
 	} else {
 		// Falling edge
-		event = DOOR_CLOSED;
+		event = DOOR_OPEN;
 	}
 	xTaskNotify(reedTaskHandle, event, eSetValueWithOverwrite);
 }
@@ -312,9 +325,12 @@ static void reedTask(void *p) {
 		// Actions
 		switch (event) {
 		case DOOR_CLOSED:
+			xTimerStop(reedAlarmTimer, 0);
+			GPIOA->PCOR |= (1 << BUZZER_PIN);
 			reedData.value = DOOR_CLOSED;
 			break;
 		case DOOR_OPEN:
+			xTimerStart(reedAlarmTimer, 0);
 			reedData.value = DOOR_OPEN;
 			break;
 		default:
@@ -322,6 +338,19 @@ static void reedTask(void *p) {
 		}
 
 		xQueueSend(sensorDataQueue, &reedData, portMAX_DELAY);
+	}
+}
+
+void reedAlarmCallback(TimerHandle_t xTimer) {
+	xSemaphoreGive(alarmTriggered);
+}
+
+static void alarmTask(void *p) {
+	while (1) {
+		if (xSemaphoreTake(alarmTriggered, portMAX_DELAY) == pdTRUE) {
+			PRINTF("Timer has gone off\r\n");
+			GPIOA->PSOR |= (1 << BUZZER_PIN);
+		}
 	}
 }
 
@@ -384,13 +413,19 @@ int main(void) {
 	initHX711();
 	initReed();
 	initServo();
+	initBuzzer();
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 	msgQueue = xQueueCreate(QLEN, sizeof(TMessage));
 	sensorDataQueue = xQueueCreate(QLEN, sizeof(TSensorData));
 
-	reedDebounceTimer = xTimerCreate("Debounce Timer", pdMS_TO_TICKS(50), pdFALSE,
-			NULL, reedDebouncedCallback);
+	reedDebounceTimer = xTimerCreate("Debounce Timer", pdMS_TO_TICKS(50),
+	pdFALSE,
+	NULL, reedDebouncedCallback);
+	reedAlarmTimer = xTimerCreate("Alarm Timer", pdMS_TO_TICKS(TIMER_DELAY),
+	pdFALSE, NULL, reedAlarmCallback);
+
+	alarmTriggered = xSemaphoreCreateBinary();
 
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
@@ -398,6 +433,8 @@ int main(void) {
 	NULL);
 	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 			&reedTaskHandle);
+	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 100, NULL, 3,
+			NULL);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
 	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",

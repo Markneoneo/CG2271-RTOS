@@ -15,7 +15,7 @@
 #include "pin_mux.h"
 #include "clock_config.h"
 #include "fsl_debug_console.h"
-/* TODO: insert other include files here. */
+
 #include <string.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -23,7 +23,8 @@
 #include "timers.h"
 #include <semphr.h>
 
-/* TODO: insert other definitions and declarations here. */
+#include "servo.h"
+
 /* UART */
 #define BAUD_RATE 9600
 #define UART_TX_PTE22 	22
@@ -164,7 +165,6 @@ void UART2_FLEXIO_IRQHandler(void) {
 			recv_ptr = 0;
 		}
 	}
-
 }
 
 void initReed() {
@@ -412,6 +412,7 @@ int main(void) {
 	initUART2(115200);
 	initHX711();
 	initReed();
+	initServo();
 	initBuzzer();
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));

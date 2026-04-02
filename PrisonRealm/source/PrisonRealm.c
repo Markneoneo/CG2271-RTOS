@@ -25,6 +25,8 @@
 
 #include "servo.h"
 
+#include "../../common/protocol.h"
+
 /* UART */
 #define BAUD_RATE 9600
 #define UART_TX_PTE22 	22
@@ -35,17 +37,6 @@
 char send_buffer[MAX_MSG_LEN];
 
 /* Sensors */
-
-// Sensor data structs
-typedef enum {
-	SENSOR_REED = 0,
-	SENSOR_HX711,
-} SensorType;
-
-typedef struct {
-	SensorType sensor;
-	int32_t value;
-} TSensorData;
 
 // Reed Sensor and Buzzer
 #define REED_PIN        1 // PTA 1
@@ -271,7 +262,7 @@ int32_t hx711ReadData(void) {
 void hx711Task(void *p) {
     while (1) {
 		TSensorData hx711Data;
-		hx711Data.sensor = SENSOR_HX711;
+		hx711Data.sensor = SENSOR_LOAD;
 		int32_t sum = 0;
 
 		for (int i = 0; i < HX711_N; i++) {

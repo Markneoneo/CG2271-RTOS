@@ -26,6 +26,8 @@
 #include <ArduinoJson.h>
 #include "env.h"
 
+#include "../common/protocol.h"
+
 #define DHT_PIN          7
 #define DHTTYPE          DHT11
 
@@ -34,18 +36,6 @@
 #define UART1_BAUD       9600
 
 #define COMMAND_POLL_MS  2000
-
-typedef enum {
-    SENSOR_REED  = 0,
-    SENSOR_TEMP  = 1,
-    SENSOR_LOAD  = 2,
-    SENSOR_SHOCK = 3,
-} SensorType;
-
-typedef struct {
-    SensorType sensor;
-    float      value;
-} TLogEntry;
 
 typedef struct {
     char command[32];
@@ -152,7 +142,7 @@ static void markCommandExecuted(int commandId) {
 
 // Task: Upload Consumer 
 static void uploadTask(void *pv) {
-    TLogEntry entry;
+    TSensorData entry;
     for (;;) {
         if (xQueueReceive(uploadQueue, &entry, portMAX_DELAY) == pdTRUE) {
             if (WiFi.status() == WL_CONNECTED) {
@@ -237,7 +227,7 @@ static void uartRecvTask(void *pv) {
                     StaticJsonDocument<256> doc;  // Stack allocated
                     DeserializationError err = deserializeJson(doc, line);
                     if (!err) {
-                        TLogEntry entry;
+                        TSensorData entry;
                         entry.sensor = (SensorType)doc["sensor"].as<int>();
                         entry.value  = doc["value"].as<float>();
                         Serial.printf("[UART RX] sensor=%d value=%.2f\n",
@@ -263,7 +253,7 @@ static void tempTask(void *pv) {
         float t = dht.readTemperature();
         if (!isnan(t)) {
             Serial.printf("[TEMP] %.1f C\n", t);
-            TLogEntry entry = { SENSOR_TEMP, t };
+            TSensorData entry = { SENSOR_TEMP, t };
             xQueueSend(uploadQueue, &entry, 0);
         } else {
             Serial.println("[TEMP] Read failed.");
@@ -283,7 +273,7 @@ void setup() {
     initDHT();
     initWiFi();
 
-    uploadQueue  = xQueueCreate(20, sizeof(TLogEntry));
+    uploadQueue  = xQueueCreate(20, sizeof(TSensorData));
     commandQueue = xQueueCreate(10, sizeof(TCommand));
     dbMutex      = xSemaphoreCreateMutex();
 

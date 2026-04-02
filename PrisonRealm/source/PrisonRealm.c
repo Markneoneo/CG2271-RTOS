@@ -33,9 +33,9 @@
 #define MAX_MSG_LEN		256
 char send_buffer[MAX_MSG_LEN];
 
-#define READ_DELAY 2000
-
 /* Sensors */
+
+// Sensor data structs
 typedef enum {
 	SENSOR_REED = 0,
 	SENSOR_HX711,
@@ -46,18 +46,21 @@ typedef struct {
 	int32_t value;
 } TSensorData;
 
+// Reed Sensor and Buzzer
 #define REED_PIN        1 // PTA 1
+#define BUZZER_PIN      12 // PTA12
+#define DOOR_OPEN   0
+#define DOOR_CLOSED 1
+#define TIMER_DELAY 2000 // 2s or 2000 ms
+
+// Load Cell
 #define HX711_DOUT_PIN  4 // PTA 4
 #define HX711_SCK_PIN   5 // PTA 5
 #define HX711_N         20 // Averaged readings
-#define BUZZER_PIN      12 // PTA12
 
 const int32_t HX711_OFFSET = 576950;
 const int32_t HX711_SCALE  = 398;
 
-#define DOOR_OPEN   0
-#define DOOR_CLOSED 1
-#define TIMER_DELAY 2000 // 2s or 2000 ms
 #define QLEN	5
 
 TaskHandle_t reedTaskHandle;
@@ -205,7 +208,6 @@ void initHX711() {
 	// DOUT is HIGH when data is not ready.
 	// SCK should be set to LOW. When DOUT goes low, pulse SCK 25 times to read in 24 bits.
 	// DOUT will go back HIGH on the 25th pulse.
-	NVIC_DisableIRQ(PORTA_IRQn);
 	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
 
 	// Set as GPIO
@@ -220,10 +222,6 @@ void initHX711() {
 
 	// Set SCK LOW
 	GPIOA->PCOR |= (1 << HX711_SCK_PIN);
-
-	// Priority already set in InitReed, and this will be polling
-	NVIC_ClearPendingIRQ(PORTA_IRQn);
-	NVIC_EnableIRQ(PORTA_IRQn);
 }
 
 static inline bool hx711IsReady(void) {

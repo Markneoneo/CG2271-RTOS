@@ -20,9 +20,10 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
+#include "timers.h"
 
 /* TODO: insert other definitions and declarations here. */
-
+/* UART */
 #define BAUD_RATE 9600
 #define UART_TX_PTE22 	22
 #define UART_RX_PTE23 	23
@@ -33,11 +34,33 @@ char send_buffer[MAX_MSG_LEN];
 
 #define READ_DELAY 2000
 
+/* Sensors */
+typedef enum {
+	SENSOR_REED = 0,
+} SensorType;
+
+typedef struct {
+	SensorType sensor;
+	int32_t value;
+} TSensorData;
+
+#define REED_PIN 1 // PTA 1
+#define DOOR_OPEN 0
+#define DOOR_CLOSED 1
+
 #define QLEN	5
-QueueHandle_t queue;
+
+TaskHandle_t reedTaskHandle;
+
 typedef struct tm {
 	char message[MAX_MSG_LEN];
 } TMessage;
+
+QueueHandle_t queue;
+QueueHandle_t sensorDataQueue;
+QueueHandle_t msgQueue; // UART Out
+
+TimerHandle_t reedDebounceTimer;
 
 void initUART2(uint32_t baud_rate) {
 	NVIC_DisableIRQ(UART2_FLEXIO_IRQn);
@@ -129,6 +152,97 @@ void UART2_FLEXIO_IRQHandler(void) {
 
 }
 
+void initReed() {
+	NVIC_DisableIRQ(PORTA_IRQn);
+	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
+
+	// Enable pull-up
+	PORTA->PCR[REED_PIN] &= ~PORT_PCR_PS_MASK;
+	PORTA->PCR[REED_PIN] |= PORT_PCR_PS(1);
+	PORTA->PCR[REED_PIN] &= ~PORT_PCR_PE_MASK;
+	PORTA->PCR[REED_PIN] |= PORT_PCR_PE(1);
+
+	// Set as GPIO
+	PORTA->PCR[REED_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTA->PCR[REED_PIN] |= PORT_PCR_MUX(1);
+
+	// Set as input
+	GPIOA->PDDR &= ~(1 << REED_PIN);
+
+	// Enable interrupt on BOTH edges
+	PORTA->PCR[REED_PIN] &= ~PORT_PCR_IRQC_MASK;
+	PORTA->PCR[REED_PIN] |= PORT_PCR_IRQC(0b1011);
+
+	NVIC_SetPriority(PORTA_IRQn, 192);
+	NVIC_ClearPendingIRQ(PORTA_IRQn);
+	NVIC_EnableIRQ(PORTA_IRQn);
+}
+
+void PORTA_IRQHandler() {
+	NVIC_ClearPendingIRQ(PORTA_IRQn);
+
+	// REED
+	if (PORTA->ISFR & (1 << REED_PIN)) {
+		BaseType_t hpw = pdFALSE;
+		xTimerStartFromISR(reedDebounceTimer, &hpw);
+		portYIELD_FROM_ISR(hpw);
+	}
+
+	PORTA->ISFR |= (1 << REED_PIN);
+}
+
+void reedDebouncedCallback(TimerHandle_t xTimer) {
+	uint32_t event;
+	// Check if rising or falling edge
+	if (GPIOA->PDIR & (1 << REED_PIN)) {
+		// Pin is 1, rising edge
+		event = DOOR_OPEN;
+	} else {
+		// Falling edge
+		event = DOOR_CLOSED;
+	}
+	xTaskNotify(reedTaskHandle, event, eSetValueWithOverwrite);
+}
+
+static void reedTask(void *p) {
+	while (1) {
+		uint32_t event;
+
+		// Clear all bits on exit
+		xTaskNotifyWait(0, 0xFFFFFFFF, &event, portMAX_DELAY);
+		TSensorData reedData;
+		reedData.sensor = SENSOR_REED;
+
+		// Actions
+		switch (event) {
+		case DOOR_CLOSED:
+			reedData.value = DOOR_CLOSED;
+			break;
+		case DOOR_OPEN:
+			reedData.value = DOOR_OPEN;
+			break;
+		default:
+			break;
+		}
+
+		xQueueSend(sensorDataQueue, &reedData, portMAX_DELAY);
+	}
+}
+
+static void sendSensorDataTask(void *p) {
+	while (1) {
+		TSensorData sensorData;
+		if (xQueueReceive(sensorDataQueue, &sensorData, portMAX_DELAY) == pdTRUE) {
+			TMessage msg;
+			snprintf(msg.message, MAX_MSG_LEN,
+					"{\"sensor\":%d, \"value\":%d}\r\n",
+					(int32_t) sensorData.sensor, sensorData.value);
+			PRINTF("%s", msg.message);
+			xQueueSend(msgQueue, &msg, portMAX_DELAY);
+		}
+	}
+}
+
 void sendMessage(char *message) {
 	strncpy(send_buffer, message, MAX_MSG_LEN);
 
@@ -148,11 +262,11 @@ static void recvTask(void *p) {
 }
 
 static void sendTask(void *p) {
-	char buffer[MAX_MSG_LEN];
 	while (1) {
-		sprintf(buffer, "Read Value");
-		sendMessage(buffer);
-		vTaskDelay(pdMS_TO_TICKS(READ_DELAY));
+		TMessage msg;
+		if (xQueueReceive(msgQueue, &msg, portMAX_DELAY) == pdTRUE) {
+			sendMessage(msg.message);
+		}
 	}
 }
 /*
@@ -169,13 +283,25 @@ int main(void) {
 	BOARD_InitDebugConsole();
 #endif
 
-	initUART2(9600);
+	initUART2(115200);
+	initReed();
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
+	msgQueue = xQueueCreate(QLEN, sizeof(TMessage));
+	sensorDataQueue = xQueueCreate(QLEN, sizeof(TSensorData));
+
+	reedDebounceTimer = xTimerCreate("Debounce Timer", pdMS_TO_TICKS(50), pdFALSE,
+			NULL, reedDebouncedCallback);
+
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
 	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
+	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
+			&reedTaskHandle);
+	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
+	configMINIMAL_STACK_SIZE + 100, NULL, 3, NULL);
+
 	vTaskStartScheduler();
 
 	/* Force the counter to be placed into memory. */

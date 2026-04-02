@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include "env.h"
+#include "secrets.h"
 
 Supabase db;
 const char *supabase_url = SUPABASE_URL;
@@ -34,7 +35,10 @@ void action() {
 }
 
 void setup() {
+
+  Serial1.begin(115200, SERIAL_8N1, NEW_RX_PIN, NEW_TX_PIN);
   Serial.begin(115200);
+  /*
   Serial.print("Connecting to SSID: ");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
@@ -45,22 +49,21 @@ void setup() {
   }
   Serial.print("\nConnected to WiFi network with IP Address: ");
   Serial.println(WiFi.localIP());
-
-  pinMode(REED_SENSOR, INPUT);
-  attachInterrupt(digitalPinToInterrupt(REED_SENSOR), action, FALLING);
+*/
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  if (Serial.available() > 0) {
-    String s = Serial.readString();
-    if (s == "send") {
-      uploadSensorData(5);
-    }
-  }
-
-  if (triggered) {
-    Serial.println("Shaken");
-    triggered = false;
-  }
+  while (Serial1.available() <= 0)
+    ;
+  String json = Serial1.readString();
+  Serial.print("Message received: ");
+  Serial.print(json);
+  JsonDocument doc;
+  deserializeJson(doc, json);
+  int sensor = doc["sensor"];
+  int value = doc["value"];
+  Serial.println(sensor);
+  Serial.println(value);
 }
+

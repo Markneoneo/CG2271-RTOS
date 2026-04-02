@@ -50,6 +50,7 @@ typedef struct {
 #define HX711_DOUT_PIN  4 // PTA 4
 #define HX711_SCK_PIN   5 // PTA 5
 #define HX711_N         20 // Averaged readings
+#define BUZZER_PIN      12 // PTA12
 
 const int32_t HX711_OFFSET = 576950;
 const int32_t HX711_SCALE  = 398;
@@ -189,6 +190,17 @@ void initReed() {
 	NVIC_EnableIRQ(PORTA_IRQn);
 }
 
+void initBuzzer() {
+	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
+
+	// Set as GPIO
+	PORTA->PCR[BUZZER_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTA->PCR[BUZZER_PIN] |= PORT_PCR_MUX(1);
+
+	// Set as output
+	GPIOA->PDDR |= (1 << BUZZER_PIN);
+}
+
 void initHX711() {
 	// DOUT is HIGH when data is not ready.
 	// SCK should be set to LOW. When DOUT goes low, pulse SCK 25 times to read in 24 bits.
@@ -316,6 +328,7 @@ static void reedTask(void *p) {
 		switch (event) {
 		case DOOR_CLOSED:
 			xTimerStop(reedAlarmTimer, 0);
+			GPIOA->PCOR |= (1 << BUZZER_PIN);
 			reedData.value = DOOR_CLOSED;
 			break;
 		case DOOR_OPEN:
@@ -338,6 +351,7 @@ static void alarmTask(void *p) {
 	while (1) {
 		if (xSemaphoreTake(alarmTriggered, portMAX_DELAY) == pdTRUE) {
 			PRINTF("Timer has gone off\r\n");
+			GPIOA->PSOR |= (1 << BUZZER_PIN);
 		}
 	}
 }
@@ -400,6 +414,7 @@ int main(void) {
 	initUART2(115200);
 	initHX711();
 	initReed();
+	initBuzzer();
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 	msgQueue = xQueueCreate(QLEN, sizeof(TMessage));

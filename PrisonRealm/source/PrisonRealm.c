@@ -41,21 +41,21 @@ char send_buffer[MAX_MSG_LEN];
 // Reed Sensor and Buzzer
 #define REED_PIN        1 // PTA 1
 #define BUZZER_PIN      12 // PTA12
-#define DOOR_OPEN   0
-#define DOOR_CLOSED 1
-#define TIMER_DELAY 2000 // 2s or 2000 ms
+#define DOOR_OPEN       0
+#define DOOR_CLOSED     1
+#define TIMER_DELAY     2000 // 2s or 2000 ms
 
+// Shock Sensor
+#define SHOCK_PIN       2 // PTA 2
 // Load Cell
 #define HX711_DOUT_PIN  4 // PTA 4
 #define HX711_SCK_PIN   5 // PTA 5
 #define HX711_N         20 // Averaged readings
 
 const int32_t HX711_OFFSET = 576950;
-const int32_t HX711_SCALE  = 398;
+const int32_t HX711_SCALE = 398;
 
 #define QLEN	5
-
-TaskHandle_t reedTaskHandle;
 
 typedef struct tm {
 	char message[MAX_MSG_LEN];
@@ -65,10 +65,16 @@ QueueHandle_t queue;
 QueueHandle_t sensorDataQueue;
 QueueHandle_t msgQueue; // UART Out
 
+TaskHandle_t reedTaskHandle;
+TaskHandle_t shockTaskHandle;
+
 TimerHandle_t reedDebounceTimer;
 TimerHandle_t reedAlarmTimer;
 
+TimerHandle_t shockDebounceTimer;
+
 SemaphoreHandle_t alarmTriggered;
+
 void initUART2(uint32_t baud_rate) {
 	NVIC_DisableIRQ(UART2_FLEXIO_IRQn);
 
@@ -195,6 +201,29 @@ void initBuzzer() {
 	GPIOA->PDDR |= (1 << BUZZER_PIN);
 }
 
+void initShock() {
+	NVIC_DisableIRQ(PORTA_IRQn);
+	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
+
+	// Disable pull-up
+	PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_PE_MASK;
+
+	// Set as GPIO
+	PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTA->PCR[SHOCK_PIN] |= PORT_PCR_MUX(1);
+
+	// Set as input
+	GPIOA->PDDR &= ~(1 << SHOCK_PIN);
+
+	// Enable interrupt on rising edge
+	PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_IRQC_MASK;
+	PORTA->PCR[SHOCK_PIN] |= PORT_PCR_IRQC(0b1001);
+
+	NVIC_SetPriority(PORTA_IRQn, 192);
+	NVIC_ClearPendingIRQ(PORTA_IRQn);
+	NVIC_EnableIRQ(PORTA_IRQn);
+}
+
 void initHX711() {
 	// DOUT is HIGH when data is not ready.
 	// SCK should be set to LOW. When DOUT goes low, pulse SCK 25 times to read in 24 bits.
@@ -217,65 +246,65 @@ void initHX711() {
 
 static inline bool hx711IsReady(void) {
 	// Returns true if DOUT reads 0
-    return !(GPIOA->PDIR & (1 << HX711_DOUT_PIN));
+	return !(GPIOA->PDIR & (1 << HX711_DOUT_PIN));
 }
 static inline void hx711SCKHigh(void) {
-    // drive SCK pin high
-	 GPIOA->PSOR |= (1 << HX711_SCK_PIN);
+	// drive SCK pin high
+	GPIOA->PSOR |= (1 << HX711_SCK_PIN);
 }
 
 static inline void hx711SCKLow(void) {
-    // drive SCK pin low
-	 GPIOA->PCOR |= (1 << HX711_SCK_PIN);
+	// drive SCK pin low
+	GPIOA->PCOR |= (1 << HX711_SCK_PIN);
 }
 static int hx711ReadBit(void) {
-    int bit;
+	int bit;
 
-    hx711SCKHigh();
+	hx711SCKHigh();
 
-    bit = (GPIOA->PDIR & (1 << HX711_DOUT_PIN)) ? 1 : 0;
+	bit = (GPIOA->PDIR & (1 << HX711_DOUT_PIN)) ? 1 : 0;
 
-    hx711SCKLow();
+	hx711SCKLow();
 
-    return bit;
+	return bit;
 }
 int32_t hx711ReadData(void) {
-    uint32_t raw = 0;
+	uint32_t raw = 0;
 
-    for (int i = 0; i < 24; i++) {
-        raw <<= 1;
-        raw |= hx711ReadBit();
-    }
+	for (int i = 0; i < 24; i++) {
+		raw <<= 1;
+		raw |= hx711ReadBit();
+	}
 
-    // one extra pulse for gain/channel selection of 128 (default)
-    hx711SCKHigh();
-    hx711SCKLow();
+	// one extra pulse for gain/channel selection of 128 (default)
+	hx711SCKHigh();
+	hx711SCKLow();
 
-    // HX711 returns 24 bit in 2s complement, so fill with 1s as necessary
-    if (raw & 0x800000) {
-        raw |= 0xFF000000;
-    }
+	// HX711 returns 24 bit in 2s complement, so fill with 1s as necessary
+	if (raw & 0x800000) {
+		raw |= 0xFF000000;
+	}
 
-    return ((int32_t)raw - HX711_OFFSET) / HX711_SCALE;
+	return ((int32_t) raw - HX711_OFFSET) / HX711_SCALE;
 }
 
 void hx711Task(void *p) {
-    while (1) {
+	while (1) {
 		TSensorData hx711Data;
 		hx711Data.sensor = SENSOR_LOAD;
 		int32_t sum = 0;
 
 		for (int i = 0; i < HX711_N; i++) {
-		    while (!hx711IsReady()) {
-		        vTaskDelay(pdMS_TO_TICKS(5));
-		    }
+			while (!hx711IsReady()) {
+				vTaskDelay(pdMS_TO_TICKS(5));
+			}
 
-		    sum += hx711ReadData();
+			sum += hx711ReadData();
 		}
 		hx711Data.value = sum / HX711_N;
 		xQueueSend(sensorDataQueue, &hx711Data, portMAX_DELAY);
 		vTaskDelay(pdMS_TO_TICKS(1000));
-    }
+	}
 }
 
 void PORTA_IRQHandler() {
@@ -287,8 +316,14 @@ void PORTA_IRQHandler() {
 		xTimerStartFromISR(reedDebounceTimer, &hpw);
 		portYIELD_FROM_ISR(hpw);
 	}
+	// Shock
+	if (PORTA->ISFR & (1 << SHOCK_PIN)) {
+		BaseType_t hpw = pdFALSE;
+		xTimerStartFromISR(shockDebounceTimer, &hpw);
+		portYIELD_FROM_ISR(hpw);
+	}
 
-	PORTA->ISFR |= (1 << REED_PIN);
+	PORTA->ISFR |= (1 << REED_PIN) | (1 << SHOCK_PIN);
 }
 
 void reedDebouncedCallback(TimerHandle_t xTimer) {
@@ -345,6 +380,22 @@ static void alarmTask(void *p) {
 	}
 }
 
+void shockDebouncedCallback(TimerHandle_t xTimer) {
+	xTaskNotifyGive(shockTaskHandle);
+}
+
+static void shockTask(void *p) {
+	TSensorData shockData;
+	shockData.sensor = SENSOR_SHOCK;
+	shockData.value = 1;
+
+	while (1) {
+		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) == pdTRUE) {
+			xQueueSend(sensorDataQueue, &shockData, portMAX_DELAY);
+		}
+	}
+}
+
 static void sendSensorDataTask(void *p) {
 	while (1) {
 		TSensorData sensorData;
@@ -352,7 +403,7 @@ static void sendSensorDataTask(void *p) {
 			TMessage msg;
 			snprintf(msg.message, MAX_MSG_LEN,
 					"{\"sensor\":%d, \"value\":%d}\r\n",
-					(int32_t) sensorData.sensor, sensorData.value);
+					(int32_t) sensorData.sensor, (uint32_t) sensorData.value);
 			PRINTF("Sending message: %s", msg.message);
 			xQueueSend(msgQueue, &msg, portMAX_DELAY);
 		}
@@ -405,6 +456,7 @@ int main(void) {
 	initReed();
 	initServo();
 	initBuzzer();
+	initShock();
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 	msgQueue = xQueueCreate(QLEN, sizeof(TMessage));
@@ -415,7 +467,8 @@ int main(void) {
 	NULL, reedDebouncedCallback);
 	reedAlarmTimer = xTimerCreate("Alarm Timer", pdMS_TO_TICKS(TIMER_DELAY),
 	pdFALSE, NULL, reedAlarmCallback);
-
+	shockDebounceTimer = xTimerCreate("Shock Debounce", pdMS_TO_TICKS(50),
+	pdFALSE, NULL, shockDebouncedCallback);
 	alarmTriggered = xSemaphoreCreateBinary();
 
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
@@ -425,9 +478,11 @@ int main(void) {
 	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 			&reedTaskHandle);
 	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 100, NULL, 3,
-			NULL);
+	NULL);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
+	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
+			&shockTaskHandle);
 	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
 	configMINIMAL_STACK_SIZE + 100, NULL, 3, NULL);
 

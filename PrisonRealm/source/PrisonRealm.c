@@ -202,26 +202,26 @@ void initBuzzer() {
 }
 
 void initShock() {
-	NVIC_DisableIRQ(PORTA_IRQn);
-	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
+	 NVIC_DisableIRQ(PORTA_IRQn);
+	 SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
 
-	// Disable pull-up
-	PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_PE_MASK;
+	 // Disable pull-up
+	 PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_PE_MASK;
 
-	// Set as GPIO
-	PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_MUX_MASK;
-	PORTA->PCR[SHOCK_PIN] |= PORT_PCR_MUX(1);
+	 // Set as GPIO
+	 PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_MUX_MASK;
+	 PORTA->PCR[SHOCK_PIN] |= PORT_PCR_MUX(1);
 
-	// Set as input
-	GPIOA->PDDR &= ~(1 << SHOCK_PIN);
+	 // Set as input
+	 GPIOA->PDDR &= ~(1 << SHOCK_PIN);
 
-	// Enable interrupt on rising edge
-	PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_IRQC_MASK;
-	PORTA->PCR[SHOCK_PIN] |= PORT_PCR_IRQC(0b1001);
+	 // Enable interrupt on rising edge
+	 PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_IRQC_MASK;
+	 PORTA->PCR[SHOCK_PIN] |= PORT_PCR_IRQC(0b1001);
 
-	NVIC_SetPriority(PORTA_IRQn, 192);
-	NVIC_ClearPendingIRQ(PORTA_IRQn);
-	NVIC_EnableIRQ(PORTA_IRQn);
+	 NVIC_SetPriority(PORTA_IRQn, 192);
+	 NVIC_ClearPendingIRQ(PORTA_IRQn);
+	 NVIC_EnableIRQ(PORTA_IRQn);
 }
 
 void initHX711() {
@@ -309,21 +309,18 @@ void hx711Task(void *p) {
 
 void PORTA_IRQHandler() {
 	NVIC_ClearPendingIRQ(PORTA_IRQn);
+	BaseType_t hpw = pdFALSE;
 
-	// REED
 	if (PORTA->ISFR & (1 << REED_PIN)) {
-		BaseType_t hpw = pdFALSE;
+		PORTA->ISFR = (1 << REED_PIN);
 		xTimerStartFromISR(reedDebounceTimer, &hpw);
-		portYIELD_FROM_ISR(hpw);
 	}
-	// Shock
 	if (PORTA->ISFR & (1 << SHOCK_PIN)) {
-		BaseType_t hpw = pdFALSE;
+		PORTA->ISFR = (1 << SHOCK_PIN);
 		xTimerStartFromISR(shockDebounceTimer, &hpw);
-		portYIELD_FROM_ISR(hpw);
 	}
 
-	PORTA->ISFR |= (1 << REED_PIN) | (1 << SHOCK_PIN);
+	portYIELD_FROM_ISR(hpw);
 }
 
 void reedDebouncedCallback(TimerHandle_t xTimer) {
@@ -482,7 +479,7 @@ int main(void) {
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
 	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
-			&shockTaskHandle);
+		&shockTaskHandle);
 	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
 	configMINIMAL_STACK_SIZE + 100, NULL, 3, NULL);
 

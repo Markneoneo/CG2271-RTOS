@@ -33,20 +33,21 @@
 #define UART_RX_PTE23 	23
 #define UART2_INT_PRIO	128
 
-#define MAX_MSG_LEN		256
+#define MAX_MSG_LEN		64
 char send_buffer[MAX_MSG_LEN];
 
 /* Sensors */
 
 // Reed Sensor and Buzzer
-#define REED_PIN        1 // PTA 1
-#define BUZZER_PIN      12 // PTA12
+#define REED_PIN        12 // PTA12
+#define BUZZER_PIN      13 // PTA13
 #define DOOR_OPEN       0
 #define DOOR_CLOSED     1
 #define TIMER_DELAY     2000 // 2s or 2000 ms
 
 // Shock Sensor
-#define SHOCK_PIN       2 // PTA 2
+#define SHOCK_PIN       2 // PTD 2
+
 // Load Cell
 #define HX711_DOUT_PIN  4 // PTA 4
 #define HX711_SCK_PIN   5 // PTA 5
@@ -65,8 +66,8 @@ QueueHandle_t queue;
 QueueHandle_t sensorDataQueue;
 QueueHandle_t msgQueue; // UART Out
 
-TaskHandle_t reedTaskHandle;
-TaskHandle_t shockTaskHandle;
+TaskHandle_t reedTaskHandle = NULL;
+TaskHandle_t shockTaskHandle = NULL;
 
 TimerHandle_t reedDebounceTimer;
 TimerHandle_t reedAlarmTimer;
@@ -202,26 +203,30 @@ void initBuzzer() {
 }
 
 void initShock() {
-	 NVIC_DisableIRQ(PORTA_IRQn);
-	 SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
+	NVIC_DisableIRQ(PORTC_PORTD_IRQn);
+	SIM->SCGC5 |= SIM_SCGC5_PORTD_MASK;
 
-	 // Disable pull-up
-	 PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_PE_MASK;
+	// Enable pull-down
+	PORTD->PCR[SHOCK_PIN] &= ~PORT_PCR_PS_MASK;
+	PORTD->PCR[SHOCK_PIN] |= PORT_PCR_PS(0);
+	PORTD->PCR[SHOCK_PIN] &= ~PORT_PCR_PE_MASK;
+	PORTD->PCR[SHOCK_PIN] |= PORT_PCR_PE(1);
 
-	 // Set as GPIO
-	 PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_MUX_MASK;
-	 PORTA->PCR[SHOCK_PIN] |= PORT_PCR_MUX(1);
+	// Set as GPIO
+	PORTD->PCR[SHOCK_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTD->PCR[SHOCK_PIN] |= PORT_PCR_MUX(1);
 
-	 // Set as input
-	 GPIOA->PDDR &= ~(1 << SHOCK_PIN);
+	// Set as input
+	GPIOD->PDDR &= ~(1 << SHOCK_PIN);
 
-	 // Enable interrupt on rising edge
-	 PORTA->PCR[SHOCK_PIN] &= ~PORT_PCR_IRQC_MASK;
-	 PORTA->PCR[SHOCK_PIN] |= PORT_PCR_IRQC(0b1001);
+	// Enable interrupt on rising edge
+	PORTD->PCR[SHOCK_PIN] &= ~PORT_PCR_IRQC_MASK;
+	PORTD->PCR[SHOCK_PIN] |= PORT_PCR_IRQC(0b1001);
 
-	 NVIC_SetPriority(PORTA_IRQn, 192);
-	 NVIC_ClearPendingIRQ(PORTA_IRQn);
-	 NVIC_EnableIRQ(PORTA_IRQn);
+	NVIC_SetPriority(PORTC_PORTD_IRQn, 192);
+	NVIC_ClearPendingIRQ(PORTC_PORTD_IRQn);
+
+	NVIC_EnableIRQ(PORTC_PORTD_IRQn);
 }
 
 void initHX711() {
@@ -315,8 +320,16 @@ void PORTA_IRQHandler() {
 		PORTA->ISFR = (1 << REED_PIN);
 		xTimerStartFromISR(reedDebounceTimer, &hpw);
 	}
-	if (PORTA->ISFR & (1 << SHOCK_PIN)) {
-		PORTA->ISFR = (1 << SHOCK_PIN);
+
+	portYIELD_FROM_ISR(hpw);
+}
+
+void PORTC_PORTD_IRQHandler() {
+	NVIC_ClearPendingIRQ(PORTC_PORTD_IRQn);
+	BaseType_t hpw = pdFALSE;
+
+	if (PORTD->ISFR & (1 << SHOCK_PIN)) {
+		PORTD->ISFR = (1 << SHOCK_PIN);
 		xTimerStartFromISR(shockDebounceTimer, &hpw);
 	}
 
@@ -378,7 +391,8 @@ static void alarmTask(void *p) {
 }
 
 void shockDebouncedCallback(TimerHandle_t xTimer) {
-	xTaskNotifyGive(shockTaskHandle);
+	if (shockTaskHandle != NULL)
+		xTaskNotifyGive(shockTaskHandle);
 }
 
 static void shockTask(void *p) {
@@ -388,6 +402,7 @@ static void shockTask(void *p) {
 
 	while (1) {
 		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) == pdTRUE) {
+			//PRINTF("Shock triggered!\r\n");  // add this
 			xQueueSend(sensorDataQueue, &shockData, portMAX_DELAY);
 		}
 	}
@@ -476,13 +491,16 @@ int main(void) {
 			&reedTaskHandle);
 	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 100, NULL, 3,
 	NULL);
-	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 2,
+	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
-	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
-		&shockTaskHandle);
-	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
-	configMINIMAL_STACK_SIZE + 100, NULL, 3, NULL);
 
+	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
+		&shockTaskHandle);
+
+	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
+	configMINIMAL_STACK_SIZE + 100, NULL, 2, NULL);
+
+	PRINTF("Free heap: %d\r\n", xPortGetFreeHeapSize());
 	vTaskStartScheduler();
 
 	/* Force the counter to be placed into memory. */

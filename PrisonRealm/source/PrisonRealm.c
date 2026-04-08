@@ -28,7 +28,7 @@
 #include "../../common/protocol.h"
 
 /* UART */
-#define BAUD_RATE 9600
+#define BAUD_RATE 115200
 #define UART_TX_PTE22 	22
 #define UART_RX_PTE23 	23
 #define UART2_INT_PRIO	128
@@ -449,6 +449,21 @@ static void sendTask(void *p) {
 		}
 	}
 }
+
+static void servoTask(void *p) {
+	int count = 0;
+	while (1) {
+		count = (count == 0) ? 1 : 0;
+
+		if (count == 0) {
+			setServoUs(500);
+		} else {
+			setServoUs(2500);
+		}
+
+		vTaskDelay(pdMS_TO_TICKS(1000));
+	}
+}
 /*
  * @brief   Application entry point.
  */
@@ -463,7 +478,7 @@ int main(void) {
 	BOARD_InitDebugConsole();
 #endif
 
-	initUART2(115200);
+	initUART2(BAUD_RATE);
 	initHX711();
 	initReed();
 	initServo();
@@ -492,6 +507,8 @@ int main(void) {
 	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 100, NULL, 3,
 	NULL);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 1,
+	NULL);
+	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 1,
 	NULL);
 
 	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,

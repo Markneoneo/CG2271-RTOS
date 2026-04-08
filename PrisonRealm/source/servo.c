@@ -18,23 +18,7 @@
 #define SERVO_CENTER_US  1500
 #define SERVO_MAX_US     3500
 
-void setMCGIRClk(void) { // 8MHz
-	// 1. Choose LIRC, enable IRC source for low freq
-	MCG->C1 &= ~MCG_C1_CLKS_MASK; // 0 out bits first
-	MCG->C1 |= ((MCG_C1_CLKS(0b01) | MCG_C1_IRCLKEN_MASK));
-
-	// 2. Choose 8M by setting to 1
-	MCG->C2 |= MCG_C2_IRCS_MASK;
-
-	// 3. Choose FCRDIV and LIRC_DIV2 to divide 1 by setting to 0
-	MCG->SC &= ~MCG_SC_FCRDIV_MASK;
-	MCG->SC |= MCG_SC_FCRDIV(0b000);
-	MCG->MC &= ~MCG_MC_LIRC_DIV2_MASK;
-	MCG->MC |= MCG_MC_LIRC_DIV2(0b000);
-}
-
 void initServo(void) {
-	setMCGIRClk();
 
 	// Turn on clock gating
 	SIM->SCGC6 |= SIM_SCGC6_TPM1_MASK;

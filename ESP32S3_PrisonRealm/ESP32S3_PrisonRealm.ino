@@ -217,26 +217,28 @@ static void uartSendTask(void *pv) {
 
 // Task: UART Receiver (MCXC444 -> ESP32)
 static void uartRecvTask(void *pv) {
-  if (Serial1.available()) {
-    String line = Serial1.readStringUntil('\n');
-    line.trim();
-    if (line.length() > 0) {
-      StaticJsonDocument<256> doc;
-      DeserializationError err = deserializeJson(doc, line);
-      if (!err) {
-        TSensorData entry;
-        entry.sensor = (SensorType)doc["sensor"].as<int>();
-        entry.value = doc["value"].as<float>();
-        Serial.printf("[UART RX] sensor=%d value=%.2f\n",
-                      (int)entry.sensor, entry.value);
-        xQueueSend(uploadQueue, &entry, 0);
-      } else {
-        Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
-                      err.c_str(), line.c_str());
+  for (;;) {
+    if (Serial1.available()) {
+      String line = Serial1.readStringUntil('\n');
+      line.trim();
+      if (line.length() > 0) {
+        StaticJsonDocument<256> doc;
+        DeserializationError err = deserializeJson(doc, line);
+        if (!err) {
+          TSensorData entry;
+          entry.sensor = (SensorType)doc["sensor"].as<int>();
+          entry.value = doc["value"].as<float>();
+          Serial.printf("[UART RX] sensor=%d value=%.2f\n",
+                        (int)entry.sensor, entry.value);
+          xQueueSend(uploadQueue, &entry, 0);
+        } else {
+          Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
+                        err.c_str(), line.c_str());
+        }
       }
     }
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
-  vTaskDelay(pdMS_TO_TICKS(10));
 }
 
 // Task: Temperature (DHT11)

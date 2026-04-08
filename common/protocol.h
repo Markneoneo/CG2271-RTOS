@@ -26,9 +26,15 @@ typedef enum {
     OPEN
 } DoorState;
 
+typedef enum {
+    ALARM_INACTIVE = 0,
+    ALARM_ACTIVE
+} AlarmState;
+
 typedef struct {
     LockState lock;
     DoorState door;
+    AlarmState alarm;
 } SystemState;
 
 #endif /* PROTOCOL_H */

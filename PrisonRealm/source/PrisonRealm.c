@@ -24,8 +24,14 @@
 #include <semphr.h>
 
 #include "servo.h"
+#include "rgb.h"
 
 #include "../../common/protocol.h"
+
+static SystemState systemState;
+SemaphoreHandle_t systemStateMutex;
+// systemState contains lockState and doorState.
+// Needs to be mutexed since reed and UART write to it, and LED / ESP32 reads.
 
 /* UART */
 #define BAUD_RATE 115200
@@ -52,7 +58,6 @@ char send_buffer[MAX_MSG_LEN];
 #define HX711_DOUT_PIN  4 // PTA 4
 #define HX711_SCK_PIN   5 // PTA 5
 #define HX711_N         20 // Averaged readings
-
 const int32_t HX711_OFFSET = 576950;
 const int32_t HX711_SCALE = 398;
 
@@ -67,6 +72,8 @@ QueueHandle_t sensorDataQueue;
 QueueHandle_t msgQueue; // UART Out
 
 TaskHandle_t reedTaskHandle = NULL;
+TaskHandle_t servoTaskHandle = NULL;
+TaskHandle_t sendStateTaskHandle = NULL;
 TaskHandle_t shockTaskHandle = NULL;
 
 TimerHandle_t reedDebounceTimer;
@@ -162,6 +169,32 @@ void UART2_FLEXIO_IRQHandler(void) {
 			portYIELD_FROM_ISR(hpw);
 			recv_ptr = 0;
 		}
+	}
+}
+
+void setDoorState(DoorState door) {
+	if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
+		systemState.door = door;
+		xSemaphoreGive(systemStateMutex);
+
+		xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
+	}
+}
+void setLockState(LockState lock) {
+	if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
+		systemState.lock = lock;
+		xSemaphoreGive(systemStateMutex);
+
+		xTaskNotifyGive(sendStateTaskHandle);
+		xTaskNotifyGive(servoTaskHandle);     // Fire servo based on desired state
+	}
+}
+void setAlarmState(AlarmState alarm) {
+	if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
+		systemState.alarm = alarm;
+		xSemaphoreGive(systemStateMutex);
+
+		xTaskNotifyGive(sendStateTaskHandle);
 	}
 }
 
@@ -358,9 +391,12 @@ static void reedTask(void *p) {
 		TSensorData reedData;
 		reedData.sensor = SENSOR_REED;
 
+		setDoorState((event == DOOR_CLOSED) ? CLOSED : OPEN);
+
 		// Actions
 		switch (event) {
 		case DOOR_CLOSED:
+			setAlarmState(ALARM_INACTIVE);
 			xTimerStop(reedAlarmTimer, 0);
 			GPIOA->PCOR |= (1 << BUZZER_PIN);
 			reedData.value = DOOR_CLOSED;
@@ -384,6 +420,7 @@ void reedAlarmCallback(TimerHandle_t xTimer) {
 static void alarmTask(void *p) {
 	while (1) {
 		if (xSemaphoreTake(alarmTriggered, portMAX_DELAY) == pdTRUE) {
+			setAlarmState(ALARM_ACTIVE);
 			PRINTF("Timer has gone off\r\n");
 			GPIOA->PSOR |= (1 << BUZZER_PIN);
 		}
@@ -401,7 +438,7 @@ static void shockTask(void *p) {
 	shockData.value = 1;
 
 	while (1) {
-		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) == pdTRUE) {
+		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) > 0) {
 			//PRINTF("Shock triggered!\r\n");  // add this
 			xQueueSend(sensorDataQueue, &shockData, portMAX_DELAY);
 		}
@@ -414,7 +451,7 @@ static void sendSensorDataTask(void *p) {
 		if (xQueueReceive(sensorDataQueue, &sensorData, portMAX_DELAY) == pdTRUE) {
 			TMessage msg;
 			snprintf(msg.message, MAX_MSG_LEN,
-					"{\"sensor\":%d, \"value\":%d}\r\n",
+					"{\"type\":\"sensor\", \"sensor\":%d, \"value\":%d}\r\n",
 					(int32_t) sensorData.sensor, (uint32_t) sensorData.value);
 			PRINTF("Sending message: %s", msg.message);
 			xQueueSend(msgQueue, &msg, portMAX_DELAY);
@@ -451,19 +488,95 @@ static void sendTask(void *p) {
 }
 
 static void servoTask(void *p) {
-	int count = 0;
 	while (1) {
-		count = (count == 0) ? 1 : 0;
+		// Wait until something changes
+		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) > 0) {
+			SystemState s;
 
-		if (count == 0) {
-			setServoUs(500);
-		} else {
-			setServoUs(2500);
+			xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+			s = systemState;
+			xSemaphoreGive(systemStateMutex);
+
+			if (s.lock == LOCKED)
+				servoLock();
+			else
+				servoUnlock();
 		}
-
-		vTaskDelay(pdMS_TO_TICKS(1000));
 	}
 }
+
+static void ledTask(void *p) {
+	bool blink = 0;
+
+	while (1) {
+		blink = !blink; // for toggling
+
+	    SystemState s;
+
+	    if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
+	    	s = systemState;
+	    	xSemaphoreGive(systemStateMutex);
+	    }
+
+	    // LED behavior:
+	    // door CLOSED, lock   LOCKED: GREEN
+	    // door CLOSED, lock UNLOCKED: YELLOW
+	    // door   OPEN, lock   LOCKED: ORANGE (B // for led blinkingLINKING AFTER 2S, SYNCED TO ALARM)
+	    // door   OPEN, lock UNLOCKED:    RED (BLINKING AFTER 2S, SYNCED TO ALARM)
+	    if (s.door == CLOSED && s.lock == LOCKED) {
+	        setRGB(0,255,0); // green
+	    }
+	    else if (s.door == CLOSED && s.lock == UNLOCKED) {
+	        setRGB(255,255,0); // yellow
+	    }
+	    else if (s.door == OPEN && s.lock == LOCKED) {
+	    	if ((s.alarm == ALARM_ACTIVE && blink) || s.alarm == ALARM_INACTIVE)
+	            setRGB(255,100,0);
+	        else
+	            setRGB(0,0,0);
+	    }
+	    else if (s.door == OPEN && s.lock == UNLOCKED) {
+	    	if ((s.alarm == ALARM_ACTIVE && blink) || s.alarm == ALARM_INACTIVE)
+	            setRGB(255,0,0);
+	        else
+	            setRGB(0,0,0);
+	    }
+
+	    vTaskDelay(pdMS_TO_TICKS(200));
+	}
+}
+
+// Sends system state (door = CLOSED/OPEN, lock = LOCKED/UNLOCKED)
+static void sendStateTask(void *p) {
+	while (1) {
+		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) > 0){
+			SystemState s;
+
+			if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
+				s = systemState;
+				xSemaphoreGive(systemStateMutex);
+			}
+			TMessage msg;
+			snprintf(msg.message, MAX_MSG_LEN,
+					"{\"type\":\"state\",\"door\":%d,\"lock\":%d,\"alarm\":%d}\r\n",
+					s.door, s.lock, s.alarm);
+			PRINTF("Sending message: %s", msg.message);
+			xQueueSend(msgQueue, &msg, portMAX_DELAY);
+		}
+	}
+}
+
+static void initSystemState() {
+	systemStateMutex = xSemaphoreCreateMutex();
+
+    if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
+    	systemState.door = OPEN;
+    	systemState.lock = UNLOCKED;
+    	systemState.alarm = ALARM_INACTIVE;
+    	xSemaphoreGive(systemStateMutex);
+    }
+}
+
 /*
  * @brief   Application entry point.
  */
@@ -484,6 +597,8 @@ int main(void) {
 	initServo();
 	initBuzzer();
 	initShock();
+	initSystemState();
+	initRGB();
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 	msgQueue = xQueueCreate(QLEN, sizeof(TMessage));
@@ -503,17 +618,20 @@ int main(void) {
 	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
 	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
-			&reedTaskHandle);
+		&reedTaskHandle);
 	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 100, NULL, 3,
 	NULL);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
 	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 1,
-	NULL);
+		&servoTaskHandle);
 
 	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 		&shockTaskHandle);
-
+	xTaskCreate(sendStateTask, "sendStateTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
+		&sendStateTaskHandle);
+	xTaskCreate(ledTask, "ledTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
+	NULL);
 	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
 	configMINIMAL_STACK_SIZE + 100, NULL, 2, NULL);
 

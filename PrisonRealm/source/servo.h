@@ -9,7 +9,7 @@
 #define SERVO_H_
 
 void initServo(void);
-void setServoUs(uint16_t pulse_us);
-
+void servoLock(void);
+void servoUnlock(void);
 
 #endif /* SERVO_H_ */

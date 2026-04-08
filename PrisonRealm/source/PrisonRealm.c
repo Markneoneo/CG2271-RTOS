@@ -173,29 +173,26 @@ void UART2_FLEXIO_IRQHandler(void) {
 }
 
 void setDoorState(DoorState door) {
-	if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
-		systemState.door = door;
-		xSemaphoreGive(systemStateMutex);
+	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+	systemState.door = door;
+	xSemaphoreGive(systemStateMutex);
 
-		xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
-	}
+	xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
 }
 void setLockState(LockState lock) {
-	if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
-		systemState.lock = lock;
-		xSemaphoreGive(systemStateMutex);
+	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+	systemState.lock = lock;
+	xSemaphoreGive(systemStateMutex);
 
-		xTaskNotifyGive(sendStateTaskHandle);
-		xTaskNotifyGive(servoTaskHandle);     // Fire servo based on desired state
-	}
+	xTaskNotifyGive(sendStateTaskHandle);
+	xTaskNotifyGive(servoTaskHandle);     // Fire servo based on desired state
 }
 void setAlarmState(AlarmState alarm) {
-	if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
-		systemState.alarm = alarm;
-		xSemaphoreGive(systemStateMutex);
+	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+	systemState.alarm = alarm;
+	xSemaphoreGive(systemStateMutex);
 
-		xTaskNotifyGive(sendStateTaskHandle);
-	}
+	xTaskNotifyGive(sendStateTaskHandle);
 }
 
 void initReed() {
@@ -419,11 +416,10 @@ void reedAlarmCallback(TimerHandle_t xTimer) {
 
 static void alarmTask(void *p) {
 	while (1) {
-		if (xSemaphoreTake(alarmTriggered, portMAX_DELAY) == pdTRUE) {
-			setAlarmState(ALARM_ACTIVE);
-			PRINTF("Timer has gone off\r\n");
-			GPIOA->PSOR |= (1 << BUZZER_PIN);
-		}
+		xSemaphoreTake(alarmTriggered, portMAX_DELAY);
+		setAlarmState(ALARM_ACTIVE);
+		PRINTF("Timer has gone off\r\n");
+		GPIOA->PSOR |= (1 << BUZZER_PIN);
 	}
 }
 
@@ -448,14 +444,13 @@ static void shockTask(void *p) {
 static void sendSensorDataTask(void *p) {
 	while (1) {
 		TSensorData sensorData;
-		if (xQueueReceive(sensorDataQueue, &sensorData, portMAX_DELAY) == pdTRUE) {
-			TMessage msg;
-			snprintf(msg.message, MAX_MSG_LEN,
-					"{\"type\":\"sensor\", \"sensor\":%d, \"value\":%d}\r\n",
-					(int32_t) sensorData.sensor, (uint32_t) sensorData.value);
-			PRINTF("Sending message: %s", msg.message);
-			xQueueSend(msgQueue, &msg, portMAX_DELAY);
-		}
+		xQueueReceive(sensorDataQueue, &sensorData, portMAX_DELAY);
+		TMessage msg;
+		snprintf(msg.message, MAX_MSG_LEN,
+				"{\"type\":\"sensor\", \"sensor\":%d, \"value\":%d}\r\n",
+				(int32_t) sensorData.sensor, (uint32_t) sensorData.value);
+		PRINTF("Sending message: %s", msg.message);
+		xQueueSend(msgQueue, &msg, portMAX_DELAY);
 	}
 }
 
@@ -472,18 +467,16 @@ void sendMessage(char *message) {
 static void recvTask(void *p) {
 	while (1) {
 		TMessage msg;
-		if (xQueueReceive(queue, (TMessage*) &msg, portMAX_DELAY) == pdTRUE) {
-			PRINTF("Received message: %s\r\n", msg.message);
-		}
+		xQueueReceive(queue, (TMessage*) &msg, portMAX_DELAY);
+		PRINTF("Received message: %s\r\n", msg.message);
 	}
 }
 
 static void sendTask(void *p) {
 	while (1) {
 		TMessage msg;
-		if (xQueueReceive(msgQueue, &msg, portMAX_DELAY) == pdTRUE) {
-			sendMessage(msg.message);
-		}
+		xQueueReceive(msgQueue, &msg, portMAX_DELAY);
+		sendMessage(msg.message);
 	}
 }
 
@@ -513,10 +506,9 @@ static void ledTask(void *p) {
 
 	    SystemState s;
 
-	    if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
-	    	s = systemState;
-	    	xSemaphoreGive(systemStateMutex);
-	    }
+	    xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+	    s = systemState;
+	    xSemaphoreGive(systemStateMutex);
 
 	    // LED behavior:
 	    // door CLOSED, lock   LOCKED: GREEN
@@ -552,10 +544,9 @@ static void sendStateTask(void *p) {
 		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) > 0){
 			SystemState s;
 
-			if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
-				s = systemState;
-				xSemaphoreGive(systemStateMutex);
-			}
+			xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+			s = systemState;
+			xSemaphoreGive(systemStateMutex);
 			TMessage msg;
 			snprintf(msg.message, MAX_MSG_LEN,
 					"{\"type\":\"state\",\"door\":%d,\"lock\":%d,\"alarm\":%d}\r\n",
@@ -569,12 +560,11 @@ static void sendStateTask(void *p) {
 static void initSystemState() {
 	systemStateMutex = xSemaphoreCreateMutex();
 
-    if (xSemaphoreTake(systemStateMutex, portMAX_DELAY) == pdTRUE) {
-    	systemState.door = OPEN;
-    	systemState.lock = UNLOCKED;
-    	systemState.alarm = ALARM_INACTIVE;
-    	xSemaphoreGive(systemStateMutex);
-    }
+	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+	systemState.door = OPEN;
+	systemState.lock = UNLOCKED;
+	systemState.alarm = ALARM_INACTIVE;
+	xSemaphoreGive(systemStateMutex);
 }
 
 /*

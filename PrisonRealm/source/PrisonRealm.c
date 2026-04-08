@@ -61,6 +61,7 @@ char send_buffer[MAX_MSG_LEN];
 const int32_t HX711_OFFSET = 576950;
 const int32_t HX711_SCALE = 398;
 
+#define SWITCH_PIN 3 // SW2, PTC3
 #define QLEN	5
 
 typedef struct tm {
@@ -434,10 +435,9 @@ static void shockTask(void *p) {
 	shockData.value = 1;
 
 	while (1) {
-		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) > 0) {
-			//PRINTF("Shock triggered!\r\n");  // add this
-			xQueueSend(sensorDataQueue, &shockData, portMAX_DELAY);
-		}
+		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		//PRINTF("Shock triggered!\r\n");
+		xQueueSend(sensorDataQueue, &shockData, portMAX_DELAY);
 	}
 }
 
@@ -483,18 +483,17 @@ static void sendTask(void *p) {
 static void servoTask(void *p) {
 	while (1) {
 		// Wait until something changes
-		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) > 0) {
-			SystemState s;
+		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		SystemState s;
 
-			xSemaphoreTake(systemStateMutex, portMAX_DELAY);
-			s = systemState;
-			xSemaphoreGive(systemStateMutex);
+		xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+		s = systemState;
+		xSemaphoreGive(systemStateMutex);
 
-			if (s.lock == LOCKED)
-				servoLock();
-			else
-				servoUnlock();
-		}
+		if (s.lock == LOCKED)
+			servoLock();
+		else
+			servoUnlock();
 	}
 }
 
@@ -541,30 +540,103 @@ static void ledTask(void *p) {
 // Sends system state (door = CLOSED/OPEN, lock = LOCKED/UNLOCKED)
 static void sendStateTask(void *p) {
 	while (1) {
-		if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) > 0){
-			SystemState s;
+		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		SystemState s;
 
-			xSemaphoreTake(systemStateMutex, portMAX_DELAY);
-			s = systemState;
-			xSemaphoreGive(systemStateMutex);
-			TMessage msg;
-			snprintf(msg.message, MAX_MSG_LEN,
-					"{\"type\":\"state\",\"door\":%d,\"lock\":%d,\"alarm\":%d}\r\n",
-					s.door, s.lock, s.alarm);
-			PRINTF("Sending message: %s", msg.message);
-			xQueueSend(msgQueue, &msg, portMAX_DELAY);
-		}
+		xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+		s = systemState;
+		xSemaphoreGive(systemStateMutex);
+		TMessage msg;
+		snprintf(msg.message, MAX_MSG_LEN,
+				"{\"type\":\"state\",\"door\":%d,\"lock\":%d,\"alarm\":%d}\r\n",
+				s.door, s.lock, s.alarm);
+		PRINTF("Sending message: %s", msg.message);
+		xQueueSend(msgQueue, &msg, portMAX_DELAY);
 	}
 }
 
 static void initSystemState() {
-	systemStateMutex = xSemaphoreCreateMutex();
-
-	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
 	systemState.door = OPEN;
 	systemState.lock = UNLOCKED;
 	systemState.alarm = ALARM_INACTIVE;
-	xSemaphoreGive(systemStateMutex);
+	systemStateMutex = xSemaphoreCreateMutex();
+}
+
+
+
+static void servoTestTask(void *p) {
+
+	static bool servoTestLockState = false; // local toggle state
+    while (1) {
+        servoTestLockState = !servoTestLockState;
+        PRINTF("Toggling servo lock state.\r\n");
+        setLockState(servoTestLockState ? LOCKED : UNLOCKED);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+void initSW2(void) {
+    NVIC_DisableIRQ(PORTC_PORTD_IRQn);
+    SIM->SCGC5 |= SIM_SCGC5_PORTC_MASK;
+
+    PORTC->PCR[SWITCH_PIN] &= ~PORT_PCR_MUX_MASK;
+    PORTC->PCR[SWITCH_PIN] |=  PORT_PCR_MUX(1);
+
+    // Enable internal pull-up
+    PORTC->PCR[SWITCH_PIN] |= PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+
+    GPIOC->PDDR &= ~(1 << SWITCH_PIN);
+
+    // Falling edge (active-low button)
+    PORTC->PCR[SWITCH_PIN] &= ~PORT_PCR_IRQC_MASK;
+    PORTC->PCR[SWITCH_PIN] |=  PORT_PCR_IRQC(0b1010);
+
+    NVIC_SetPriority(PORTC_PORTD_IRQn, 192);
+    NVIC_ClearPendingIRQ(PORTC_PORTD_IRQn);
+    NVIC_EnableIRQ(PORTC_PORTD_IRQn);
+}
+
+static void rgbTestTask(void *p) {
+    SystemState testState;
+    uint8_t step = 0;
+
+    while (1) {
+        switch (step % 4) {
+            case 0: // Door CLOSED, Lock LOCKED, Alarm inactive
+                testState.door  = CLOSED;
+                testState.lock  = LOCKED;
+                testState.alarm = ALARM_INACTIVE;
+                PRINTF("Should see GREEN\r\n");
+                break;
+            case 1: // Door CLOSED, Lock UNLOCKED, Alarm inactive
+                testState.door  = CLOSED;
+                testState.lock  = UNLOCKED;
+                testState.alarm = ALARM_INACTIVE;
+                PRINTF("Should see YELLOW\r\n");
+                break;
+            case 2: // Door OPEN, Lock LOCKED, Alarm active (blinking)
+                testState.door  = OPEN;
+                testState.lock  = LOCKED;
+                testState.alarm = ALARM_ACTIVE;
+                PRINTF("Should see BLINKING ORANGE\r\n");
+                break;
+            case 3: // Door OPEN, Lock UNLOCKED, Alarm active (blinking)
+                testState.door  = OPEN;
+                testState.lock  = UNLOCKED;
+                testState.alarm = ALARM_ACTIVE;
+                PRINTF("Should see BLINKING RED\r\n");
+                break;
+        }
+
+        // Update the global systemState with mutex protection
+        xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+        systemState = testState;
+        xSemaphoreGive(systemStateMutex);
+
+        step++;
+        vTaskDelay(pdMS_TO_TICKS(2000)); // 5s per state
+    }
 }
 
 /*
@@ -607,9 +679,9 @@ int main(void) {
 	NULL);
 	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
-	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
+	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 50, NULL, 2,
 		&reedTaskHandle);
-	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 100, NULL, 3,
+	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 50, NULL, 3,
 	NULL);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
@@ -622,8 +694,8 @@ int main(void) {
 		&sendStateTaskHandle);
 	xTaskCreate(ledTask, "ledTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
-	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
-	configMINIMAL_STACK_SIZE + 100, NULL, 2, NULL);
+	xTaskCreate(sendSensorDataTask, "sendSensorDataTask", configMINIMAL_STACK_SIZE + 100,
+	NULL, 2, NULL);
 
 	PRINTF("Free heap: %d\r\n", xPortGetFreeHeapSize());
 	vTaskStartScheduler();

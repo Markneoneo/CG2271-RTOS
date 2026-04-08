@@ -512,17 +512,17 @@ static void ledTask(void *p) {
 	    // LED behavior:
 	    // door CLOSED, lock   LOCKED: GREEN
 	    // door CLOSED, lock UNLOCKED: YELLOW
-	    // door   OPEN, lock   LOCKED: ORANGE (B // for led blinkingLINKING AFTER 2S, SYNCED TO ALARM)
+	    // door   OPEN, lock   LOCKED: ORANGE (BLINKING AFTER 2S, SYNCED TO ALARM)
 	    // door   OPEN, lock UNLOCKED:    RED (BLINKING AFTER 2S, SYNCED TO ALARM)
 	    if (s.door == CLOSED && s.lock == LOCKED) {
 	        setRGB(0,255,0); // green
 	    }
 	    else if (s.door == CLOSED && s.lock == UNLOCKED) {
-	        setRGB(255,255,0); // yellow
+	        setRGB(255,180,0); // yellow
 	    }
 	    else if (s.door == OPEN && s.lock == LOCKED) {
 	    	if ((s.alarm == ALARM_ACTIVE && blink) || s.alarm == ALARM_INACTIVE)
-	            setRGB(255,100,0);
+	            setRGB(255,50,0);
 	        else
 	            setRGB(0,0,0);
 	    }

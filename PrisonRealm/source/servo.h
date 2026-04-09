@@ -8,6 +8,13 @@
 #ifndef SERVO_H_
 #define SERVO_H_
 
+#include <stdio.h>
+#include "board.h"
+#include "peripherals.h"
+#include "pin_mux.h"
+#include "clock_config.h"
+#include "fsl_debug_console.h"
+
 void initServo(void);
 void servoLock(void);
 void servoUnlock(void);

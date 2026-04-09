@@ -25,6 +25,7 @@
 
 #include "servo.h"
 #include "rgb.h"
+#include "hx711.h"
 
 #include "../../common/protocol.h"
 
@@ -53,13 +54,6 @@ char send_buffer[MAX_MSG_LEN];
 
 // Shock Sensor
 #define SHOCK_PIN       2 // PTD 2
-
-// Load Cell
-#define HX711_DOUT_PIN  4 // PTA 4
-#define HX711_SCK_PIN   5 // PTA 5
-#define HX711_N         20 // Averaged readings
-const int32_t HX711_OFFSET = 576950;
-const int32_t HX711_SCALE = 398;
 
 #define SWITCH_PIN 3 // SW2, PTC3
 #define QLEN	5
@@ -258,70 +252,6 @@ void initShock() {
 	NVIC_ClearPendingIRQ(PORTC_PORTD_IRQn);
 
 	NVIC_EnableIRQ(PORTC_PORTD_IRQn);
-}
-
-void initHX711() {
-	// DOUT is HIGH when data is not ready.
-	// SCK should be set to LOW. When DOUT goes low, pulse SCK 25 times to read in 24 bits.
-	// DOUT will go back HIGH on the 25th pulse.
-	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
-
-	// Set as GPIO
-	PORTA->PCR[HX711_DOUT_PIN] &= ~PORT_PCR_MUX_MASK;
-	PORTA->PCR[HX711_DOUT_PIN] |= PORT_PCR_MUX(1);
-	PORTA->PCR[HX711_SCK_PIN] &= ~PORT_PCR_MUX_MASK;
-	PORTA->PCR[HX711_SCK_PIN] |= PORT_PCR_MUX(1);
-
-	// Set DOUT input, SCK output
-	GPIOA->PDDR &= ~(1 << HX711_DOUT_PIN);
-	GPIOA->PDDR |= (1 << HX711_SCK_PIN);
-
-	// Set SCK LOW
-	GPIOA->PCOR |= (1 << HX711_SCK_PIN);
-}
-
-static inline bool hx711IsReady(void) {
-	// Returns true if DOUT reads 0
-	return !(GPIOA->PDIR & (1 << HX711_DOUT_PIN));
-}
-static inline void hx711SCKHigh(void) {
-	// drive SCK pin high
-	GPIOA->PSOR |= (1 << HX711_SCK_PIN);
-}
-
-static inline void hx711SCKLow(void) {
-	// drive SCK pin low
-	GPIOA->PCOR |= (1 << HX711_SCK_PIN);
-}
-static int hx711ReadBit(void) {
-	int bit;
-
-	hx711SCKHigh();
-
-	bit = (GPIOA->PDIR & (1 << HX711_DOUT_PIN)) ? 1 : 0;
-
-	hx711SCKLow();
-
-	return bit;
-}
-int32_t hx711ReadData(void) {
-	uint32_t raw = 0;
-
-	for (int i = 0; i < 24; i++) {
-		raw <<= 1;
-		raw |= hx711ReadBit();
-	}
-
-	// one extra pulse for gain/channel selection of 128 (default)
-	hx711SCKHigh();
-	hx711SCKLow();
-
-	// HX711 returns 24 bit in 2s complement, so fill with 1s as necessary
-	if (raw & 0x800000) {
-		raw |= 0xFF000000;
-	}
-
-	return ((int32_t) raw - HX711_OFFSET) / HX711_SCALE;
 }
 
 void hx711Task(void *p) {

@@ -5,12 +5,7 @@
  *      Author: gordon
  */
 
-#include <stdio.h>
-#include "board.h"
-#include "peripherals.h"
-#include "pin_mux.h"
-#include "clock_config.h"
-#include "fsl_debug_console.h"
+#include "rgb.h"
 
 #define RED_PIN  30 // PTE30, TPM0-CH3
 #define GREEN_PIN 2 // PTB2,  TPM2-CH0
@@ -93,4 +88,3 @@ void setRGB(uint8_t r, uint8_t g, uint8_t b) {
 	TPM2->CONTROLS[0].CnV = g * PWM_MOD / 255;
 	TPM2->CONTROLS[1].CnV = b * PWM_MOD / 255;
 }
-

@@ -5,12 +5,7 @@
  *      Author: gordon
  */
 
-#include <stdio.h>
-#include "board.h"
-#include "peripherals.h"
-#include "pin_mux.h"
-#include "clock_config.h"
-#include "fsl_debug_console.h"
+#include "servo.h"
 
 #define SERVO_PIN        21    // PTE21 for PWM, TPM1-CH1
 #define SERVO_PERIOD_US  20000

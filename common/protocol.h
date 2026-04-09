@@ -3,6 +3,13 @@
 
 #include <stdint.h>
 
+#ifdef CLOSED
+#undef CLOSED
+#endif
+#ifdef OPEN
+#undef OPEN
+#endif
+
 // Sensor data structs
 typedef enum {
     SENSOR_REED  = 0,
@@ -26,9 +33,15 @@ typedef enum {
     OPEN
 } DoorState;
 
+typedef enum {
+    ALARM_INACTIVE = 0,
+    ALARM_ACTIVE
+} AlarmState;
+
 typedef struct {
     LockState lock;
     DoorState door;
+    AlarmState alarm;
 } SystemState;
 
 #endif /* PROTOCOL_H */

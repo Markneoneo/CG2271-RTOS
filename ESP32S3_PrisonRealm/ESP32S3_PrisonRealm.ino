@@ -6,6 +6,7 @@
  *
  * Sensors (via MCXC444 over UART):
  *   Reed switch  - SENSOR_REED  = 0
+ *   Temp sensor  - SENSOR_TEMP  = 1
  *   Load cell    - SENSOR_LOAD  = 2
  *   Shock sensor - SENSOR_SHOCK = 3
  *
@@ -25,6 +26,7 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include "env.h"
+#include <Keypad.h>
 
 #include "../common/protocol.h"
 
@@ -47,6 +49,22 @@ DHT dht(DHT_PIN, DHTTYPE);
 QueueHandle_t uploadQueue;
 QueueHandle_t commandQueue;
 SemaphoreHandle_t dbMutex;  // Protects all Supabase calls
+
+// Keypad setup
+const byte ROWS = 4;
+const byte COLS = 3;
+
+char keys[ROWS][COLS] = {
+  {'1','3','2'},
+  {'4','6','5'},
+  {'7','9','8'},
+  {'*','#','0'}
+};
+
+byte rowPins[ROWS] = {35, 36, 37, 38}; // R1-R4
+byte colPins[COLS] = {39, 40, 41};     // C1-C3
+
+Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 
 void initGojo() {
   Serial.println("[Domain Expansion] Preparing Unlimited Void...");
@@ -217,26 +235,28 @@ static void uartSendTask(void *pv) {
 
 // Task: UART Receiver (MCXC444 -> ESP32)
 static void uartRecvTask(void *pv) {
-  if (Serial1.available()) {
-    String line = Serial1.readStringUntil('\n');
-    line.trim();
-    if (line.length() > 0) {
-      StaticJsonDocument<256> doc;
-      DeserializationError err = deserializeJson(doc, line);
-      if (!err) {
-        TSensorData entry;
-        entry.sensor = (SensorType)doc["sensor"].as<int>();
-        entry.value = doc["value"].as<float>();
-        Serial.printf("[UART RX] sensor=%d value=%.2f\n",
-                      (int)entry.sensor, entry.value);
-        xQueueSend(uploadQueue, &entry, 0);
-      } else {
-        Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
-                      err.c_str(), line.c_str());
+  for (;;) {
+    if (Serial1.available()) {
+      String line = Serial1.readStringUntil('\n');
+      line.trim();
+      if (line.length() > 0) {
+        StaticJsonDocument<256> doc;
+        DeserializationError err = deserializeJson(doc, line);
+        if (!err) {
+          TSensorData entry;
+          entry.sensor = (SensorType)doc["sensor"].as<int>();
+          entry.value = doc["value"].as<float>();
+          Serial.printf("[UART RX] sensor=%d value=%.2f\n",
+              (int)entry.sensor, entry.value);
+          xQueueSend(uploadQueue, &entry, 0);
+        } else {
+          Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
+              err.c_str(), line.c_str());
+        }
       }
     }
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
-  vTaskDelay(pdMS_TO_TICKS(10));
 }
 
 // Task: Temperature (DHT11)
@@ -254,11 +274,66 @@ static void tempTask(void *pv) {
   }
 }
 
+// Task: Keypad -> Command Queue
+static void keypadTask(void *pv) {
+  const char correctPassword[] = "2271";
+  char buffer[8];       // store entered digits
+  uint8_t index = 0;    // current buffer index
+  bool entering = false;
+
+  for (;;) {
+    char key = keypad.getKey();
+    if (key) {
+      Serial.println("[KEYPAD] Pressed: %c\n", key);
+
+      if (key == '#') {
+        // Start entering password
+        entering = true;
+        index = 0;
+        memset(buffer, 0, sizeof(buffer));
+        Serial.println("[KEYPAD] Enter password...");
+      } 
+      else if (key == '*') {
+        // Immediate lock
+        TCommand cmd;
+        cmd.commandId = 0;
+        strncpy(cmd.command, "lock", sizeof(cmd.command));
+        xQueueSend(commandQueue, &cmd, 0);
+        Serial.println("[KEYPAD] Lock command sent.");
+        entering = false; // reset any partial password
+      } 
+      else if (entering && index < sizeof(buffer)-1) {
+        // Append digit to buffer
+        buffer[index++] = key;
+
+        // Check password length
+        if (index == strlen(correctPassword)) {
+          if (strncmp(buffer, correctPassword, strlen(correctPassword)) == 0) {
+            TCommand cmd;
+            cmd.commandId = 0;
+            strncpy(cmd.command, "unlock", sizeof(cmd.command));
+            xQueueSend(commandQueue, &cmd, 0);
+            Serial.println("[KEYPAD] Password correct. Unlock sent.");
+          } else {
+            Serial.println("[KEYPAD] Password incorrect.");
+          }
+          // Reset buffer
+          entering = false;
+          index = 0;
+          memset(buffer, 0, sizeof(buffer));
+        }
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   unsigned long start = millis();
-  while (!Serial && (millis() - start < 3000))
-    ;
+  while (millis() - start < 3000));
+
   Serial.println("\n--- PrisonRealm ESP32 Starting ---");
 
   initGojo();
@@ -274,6 +349,7 @@ void setup() {
   xTaskCreate(uartRecvTask, "UART_Rx", 8192, NULL, 2, NULL);
   xTaskCreate(uartSendTask, "UART_Tx", 8192, NULL, 2, NULL);
   xTaskCreate(tempTask, "Temp", 8192, NULL, 2, NULL);
+  xTaskCreate(keypadTask, "Keypad", 8192, NULL, 2, NULL);
   xTaskCreate(commandPollTask, "CmdPoll", 12288, NULL, 1, NULL);
 
   Serial.println("[INIT] All tasks started.\n");

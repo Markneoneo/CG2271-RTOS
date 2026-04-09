@@ -3,6 +3,13 @@
 
 #include <stdint.h>
 
+#ifdef CLOSED
+#undef CLOSED
+#endif
+#ifdef OPEN
+#undef OPEN
+#endif
+
 // Sensor data structs
 typedef enum {
     SENSOR_REED  = 0,

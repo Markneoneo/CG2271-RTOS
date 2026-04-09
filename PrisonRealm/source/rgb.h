@@ -1,12 +1,12 @@
 /*
- * servo.h
+ * rgb.h
  *
- *  Created on: 2 Apr 2026
+ *  Created on: 8 Apr 2026
  *      Author: gordon
  */
 
-#ifndef SERVO_H_
-#define SERVO_H_
+#ifndef RGB_H_
+#define RGB_H_
 
 #include <stdio.h>
 #include "board.h"
@@ -15,8 +15,7 @@
 #include "clock_config.h"
 #include "fsl_debug_console.h"
 
-void initServo(void);
-void servoLock(void);
-void servoUnlock(void);
+void initRGB(void);
+void setRGB(uint8_t r, uint8_t g, uint8_t b);
 
-#endif /* SERVO_H_ */
+#endif /* RGB_H_ */

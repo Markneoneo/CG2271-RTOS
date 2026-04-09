@@ -5,18 +5,15 @@
  *      Author: gordon
  */
 
-#include <stdio.h>
-#include "board.h"
-#include "peripherals.h"
-#include "pin_mux.h"
-#include "clock_config.h"
-#include "fsl_debug_console.h"
+#include "servo.h"
 
 #define SERVO_PIN        21    // PTE21 for PWM, TPM1-CH1
 #define SERVO_PERIOD_US  20000
 #define SERVO_MIN_US     100
-#define SERVO_CENTER_US  1500
 #define SERVO_MAX_US     3500
+
+#define UNLOCK_POSITION  1500
+#define LOCK_POSITION    2500
 
 void initServo(void) {
 
@@ -59,7 +56,7 @@ void initServo(void) {
 	TPM1->CONTROLS[1].CnSC |= (TPM_CnSC_MSB(1) | TPM_CnSC_ELSB(1));
 
 	// Set centre position
-	TPM1->CONTROLS[1].CnV = SERVO_CENTER_US;
+	TPM1->CONTROLS[1].CnV = UNLOCK_POSITION;
 
 	// Start timer
 	TPM1->SC |= TPM_SC_CMOD(0b1);
@@ -75,4 +72,11 @@ void setServoUs(uint16_t pulse_us) {
 	}
 
 	TPM1->CONTROLS[1].CnV = pulse_us;
+}
+
+void servoLock() {
+	setServoUs(LOCK_POSITION);
+}
+void servoUnlock() {
+	setServoUs(UNLOCK_POSITION);
 }

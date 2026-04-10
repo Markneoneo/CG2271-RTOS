@@ -398,7 +398,22 @@ static void recvTask(void *p) {
 	while (1) {
 		TMessage msg;
 		xQueueReceive(queue, (TMessage*) &msg, portMAX_DELAY);
-		PRINTF("Received message: %s\r\n", msg.message);
+		PRINTF("Received command: %s\r\n", msg.message);
+
+		// Parse command JSON from ESP32-S3.
+		// Format: {"command":"lock"}, {"command":"unlock"}, {"command":"silence"}
+		// Check "unlock" before "lock" — "unlock" contains the substring "lock".
+		if (strstr(msg.message, "\"unlock\"")) {
+			PRINTF("[CMD] Unlock received.\r\n");
+			setLockState(UNLOCKED);
+		} else if (strstr(msg.message, "\"lock\"")) {
+			PRINTF("[CMD] Lock received.\r\n");
+			setLockState(LOCKED);
+		} else if (strstr(msg.message, "\"silence\"")) {
+			PRINTF("[CMD] Silence received.\r\n");
+			setAlarmState(ALARM_INACTIVE);
+			GPIOA->PCOR |= (1 << BUZZER_PIN);
+		}
 	}
 }
 

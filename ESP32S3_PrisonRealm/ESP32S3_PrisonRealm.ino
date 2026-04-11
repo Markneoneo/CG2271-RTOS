@@ -32,7 +32,7 @@
 
 #define DHT_PIN 7
 #define DHTTYPE DHT11
-#define TEMP_TASK_DELAY 10000 //10s
+#define TEMP_TASK_DELAY 10000  //10s
 
 #define UART1_RX_PIN 18
 #define UART1_TX_PIN 17
@@ -51,6 +51,7 @@ Supabase db;
 DHT dht(DHT_PIN, DHTTYPE);
 QueueHandle_t uploadQueue;
 QueueHandle_t commandQueue;
+QueueHandle_t stateQueue;   // State data to upload to Supabase
 SemaphoreHandle_t dbMutex;  // Protects all Supabase calls
 
 // Keypad setup
@@ -112,7 +113,7 @@ void initWiFi() {
   Serial.println("[INIT] Supabase initialised.");
 }
 
-static void uploadToSupabase(SensorType sensor, float value) {
+static void uploadSensorToSupabase(TSensorData entry) {
   static const char *sensorNames[] = {
     "reed",         // SENSOR_REED  = 0
     "temperature",  // SENSOR_TEMP  = 1
@@ -123,12 +124,12 @@ static void uploadToSupabase(SensorType sensor, float value) {
   StaticJsonDocument<256> doc;
   String json;
 
-  doc["sensor_type"] = sensorNames[(int)sensor];
-  doc["value"] = value;
+  doc["sensor_type"] = sensorNames[(int)entry.sensor];
+  doc["value"] = entry.value;
   serializeJson(doc, json);
 
   Serial.printf("[UPLOAD] sensor=%s value=%.2f\n",
-                sensorNames[(int)sensor], value);
+                sensorNames[(int)entry.sensor], entry.value);
 
   if (xSemaphoreTake(dbMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
     int code = db.insert("sensor_logs", json, false);
@@ -137,6 +138,28 @@ static void uploadToSupabase(SensorType sensor, float value) {
     xSemaphoreGive(dbMutex);
   } else {
     Serial.println("[UPLOAD] Could not acquire db mutex - skipping.");
+  }
+}
+
+static void uploadStateToSupabase(SystemState state) {
+  StaticJsonDocument<256> doc;
+  String json;
+
+  doc["is_door_locked"] = (state.lock == LOCKED);
+  doc["is_door_open"]   = (state.door == OPEN);
+  doc["is_alarm_on"]    = (state.alarm == ALARM_ACTIVE);
+  serializeJson(doc, json);
+
+  Serial.printf("[UPLOAD] state: is_door_locked=%d is_door_open=%d is_alarm_on=%d\n",
+                state.lock == LOCKED, state.door == OPEN, state.alarm == ALARM_ACTIVE);
+
+  if (xSemaphoreTake(dbMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
+    int code = db.insert("state", json, false);  // table name is "state" not "system_state"
+    Serial.printf("[UPLOAD] State response: %d\n", code);
+    db.urlQuery_reset();
+    xSemaphoreGive(dbMutex);
+  } else {
+    Serial.println("[UPLOAD] Could not acquire db mutex - skipping state.");
   }
 }
 
@@ -163,15 +186,25 @@ static void markCommandExecuted(int commandId) {
 
 // Task: Upload Consumer
 static void uploadTask(void *pv) {
-  TSensorData entry;
   for (;;) {
-    if (xQueueReceive(uploadQueue, &entry, portMAX_DELAY) == pdTRUE) {
-      if (WiFi.status() == WL_CONNECTED) {
-        uploadToSupabase(entry.sensor, entry.value);
-      } else {
-        Serial.println("[UPLOAD] WiFi disconnected - dropping entry.");
-      }
+    TSensorData sensorEntry;
+    SystemState stateEntry;
+
+    if (xQueueReceive(uploadQueue, &sensorEntry, 0) == pdTRUE) {
+      if (WiFi.status() == WL_CONNECTED)
+        uploadSensorToSupabase(sensorEntry);
+      else
+        Serial.println("[UPLOAD] WiFi disconnected - dropping sensor entry.");
     }
+
+    if (xQueueReceive(stateQueue, &stateEntry, 0) == pdTRUE) {
+      if (WiFi.status() == WL_CONNECTED)
+        uploadStateToSupabase(stateEntry);
+      else
+        Serial.println("[UPLOAD] WiFi disconnected - dropping state entry.");
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 
@@ -255,17 +288,37 @@ static void uartRecvTask(void *pv) {
   for (;;) {
     if (Serial1.available()) {
       String line = Serial1.readStringUntil('\n');
+      Serial.print("[UART RX] Received: ");
+      Serial.println(line);
       line.trim();
       if (line.length() > 0) {
         StaticJsonDocument<256> doc;
         DeserializationError err = deserializeJson(doc, line);
         if (!err) {
-          TSensorData entry;
-          entry.sensor = (SensorType)doc["sensor"].as<int>();
-          entry.value = doc["value"].as<float>();
-          Serial.printf("[UART RX] sensor=%d value=%.2f\n",
-                        (int)entry.sensor, entry.value);
-          xQueueSend(uploadQueue, &entry, 0);
+          const char *type = doc["type"] | "unknown";
+
+          // Sensor
+          if (strcmp(type, "sensor") == 0) {
+            TSensorData entry;
+            entry.sensor = (SensorType)doc["sensor"].as<int>();
+            entry.value = doc["value"].as<float>();
+            Serial.printf("[UART RX] sensor=%d value=%.2f\n",
+                          (int)entry.sensor, entry.value);
+            xQueueSend(uploadQueue, &entry, 0);
+
+          // State
+          } else if (strcmp(type, "state") == 0) {
+            SystemState state;
+            state.door = (DoorState)(doc["door"] | 0);
+            state.lock = (LockState)(doc["lock"] | 0);
+            state.alarm = (AlarmState)(doc["alarm"] | 0);
+            Serial.printf("[UART RX] state: door=%d lock=%d alarm=%d\n",
+                          state.door, state.lock, state.alarm);
+            xQueueSend(stateQueue, &state, 0);
+          } else {
+            Serial.printf("[UART RX] Unknown type: %s\n", type);
+          }
+
         } else {
           Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
                         err.c_str(), line.c_str());
@@ -287,7 +340,7 @@ static void tempTask(void *pv) {
     } else {
       Serial.println("[TEMP] Read failed.");
     }
-    vTaskDelay(pdMS_TO_TICKS(TEMP_TASK_DELAY)); 
+    vTaskDelay(pdMS_TO_TICKS(TEMP_TASK_DELAY));
   }
 }
 
@@ -349,7 +402,8 @@ static void keypadTask(void *pv) {
 void setup() {
   Serial.begin(115200);
   unsigned long start = millis();
-  while ((millis() - start) < 3000);
+  while ((millis() - start) < 3000)
+    ;
 
   Serial.println("\n--- PrisonRealm ESP32 Starting ---");
 
@@ -360,12 +414,13 @@ void setup() {
 
   uploadQueue = xQueueCreate(20, sizeof(TSensorData));
   commandQueue = xQueueCreate(10, sizeof(TCommand));
+  stateQueue = xQueueCreate(10, sizeof(SystemState));
   dbMutex = xSemaphoreCreateMutex();
 
   xTaskCreate(uploadTask, "Upload", 12288, NULL, 1, NULL);
   xTaskCreate(uartRecvTask, "UART_Rx", 8192, NULL, 2, NULL);
   xTaskCreate(uartSendTask, "UART_Tx", 8192, NULL, 2, NULL);
-  
+
   xTaskCreate(tempTask, "Temp", 8192, NULL, 2, NULL);
   xTaskCreate(keypadTask, "Keypad", 8192, NULL, 2, NULL);
 

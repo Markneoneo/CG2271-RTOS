@@ -165,11 +165,11 @@
   .badge  { border: 1px solid var(--border2); border-radius: var(--r); padding: 10px 18px; text-align: center; min-width: 110px; background: var(--surface2); }
   .badge-lbl { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; font-family: var(--mono); }
   .badge-val { font-family: var(--mono); font-size: 15px; font-weight: 700; transition: color .3s; }
-  .badge.door-open   { border-color: #2a1800; }
-  .badge.door-closed { border-color: #1a2a1a; }
-  .badge.lock-locked { border-color: #1a2a1a; }
+  .badge.door-open     { border-color: #2a1800; }
+  .badge.door-closed   { border-color: #1a2a1a; }
+  .badge.lock-locked   { border-color: #1a2a1a; }
   .badge.lock-unlocked { border-color: #2a2800; }
-  .badge.alarm-active { border-color: #2a1a00; animation: badge-pulse .8s infinite; }
+  .badge.alarm-active  { border-color: #2a1a00; animation: badge-pulse .8s infinite; }
   @keyframes badge-pulse { 0%,100% { border-color:#3a1a00; } 50% { border-color:#ff704380; } }
 
   /* ── GRID ── */
@@ -194,24 +194,9 @@
   .cbtn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
   .cu { background: linear-gradient(135deg, #ffd740, #e65100); color: #000; box-shadow: var(--glow-a); }
   .cl { background: linear-gradient(135deg, #00e676, #007a40); color: #000; box-shadow: var(--glow-g); }
-  .cs { background: linear-gradient(135deg, #ff7043, #b71c1c); color: #fff; box-shadow: var(--glow-o); }
   .cmdst { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 10px; padding: 8px 12px; background: var(--surface2); border-radius: var(--r); min-height: 34px; display: flex; align-items: center; }
   .cmdst.ok  { color: var(--green); }
   .cmdst.err { color: var(--red); }
-
-  /* ── PIN MODAL ── */
-  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
-  .modal-backdrop.open { display: flex; }
-  .modal { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--rl); padding: 28px 32px; min-width: 300px; text-align: center; }
-  .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; color: var(--amber); }
-  .modal p  { font-family: var(--mono); font-size: 11px; color: var(--text-muted); margin-bottom: 20px; }
-  .pin-display { font-family: var(--mono); font-size: 28px; letter-spacing: 8px; color: var(--text); min-height: 42px; margin-bottom: 16px; border-bottom: 1px solid var(--border2); padding-bottom: 12px; }
-  .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
-  .pin-btn { background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--r); padding: 14px; font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--text); cursor: pointer; transition: background .15s, border-color .15s; }
-  .pin-btn:hover { background: var(--border); border-color: var(--amber); }
-  .pin-btn.special { font-size: 13px; }
-  .pin-wrong { animation: shake .3s; }
-  @keyframes shake { 0%,100% { transform:translateX(0) } 20%,60% { transform:translateX(-6px) } 40%,80% { transform:translateX(6px) } }
 
   /* ── SENSORS ── */
   .sgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -242,16 +227,14 @@
   .erow:hover { background: var(--surface2); }
   .ets { color: var(--text-muted); font-size: 11px; }
   .eempty { color: var(--text-muted); font-size: 12px; font-family: var(--mono); padding: 24px 0; text-align: center; }
-  /* Event type colours */
-  .e-reed-0    { color: var(--green);  }
-  .e-reed-1    { color: var(--amber);  }
-  .e-shock     { color: var(--red);    }
-  .e-load      { color: var(--blue);   }
-  .e-temperature { color: #f48fb1;     }
-  .e-lock      { color: var(--green);  }
-  .e-unlock    { color: var(--amber);  }
-  .e-silence   { color: var(--text-dim); }
-  .e-default   { color: var(--text-dim); }
+  .e-reed-0     { color: var(--green);  }
+  .e-reed-1     { color: var(--amber);  }
+  .e-shock      { color: var(--red);    }
+  .e-load       { color: var(--blue);   }
+  .e-temperature{ color: #f48fb1;       }
+  .e-lock       { color: var(--green);  }
+  .e-unlock     { color: var(--amber);  }
+  .e-default    { color: var(--text-dim); }
 
   /* ── AI PANEL ── */
   .aipanel { background: var(--surface2); border: 1px solid #1a1a3a; border-radius: var(--r); padding: 16px 18px; font-size: 14px; line-height: 1.7; color: var(--text-dim); min-height: 80px; }
@@ -267,9 +250,7 @@
   .aikey input { background: #0a1520; border: 1px solid var(--border2); border-radius: var(--r); padding: 7px 12px; font-family: var(--mono); font-size: 11px; color: var(--text); flex: 1; outline: none; transition: border-color .2s; }
   .aikey input:focus { border-color: var(--purple); }
   .aikey input::placeholder { color: var(--text-muted); }
-  .aikey-lbl  { font-family: var(--mono); font-size: 10px; color: var(--text-muted); letter-spacing: 1px; white-space: nowrap; }
-  .aikey-lnk  { font-family: var(--mono); font-size: 10px; color: var(--blue); text-decoration: none; white-space: nowrap; }
-  .aikey-lnk:hover { text-decoration: underline; }
+  .aikey-lbl { font-family: var(--mono); font-size: 10px; color: var(--text-muted); letter-spacing: 1px; white-space: nowrap; }
 
   /* ── RISK SCORE ── */
   .risk-wrap  { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
@@ -343,19 +324,14 @@
 
   <!-- STATUS HERO -->
   <div class="hero h-green" id="hero">
-    <!-- LED dot (mirrors hardware RGB LED) -->
     <div class="led-wrap">
       <div class="led c-green" id="led"></div>
       <div class="led-label">RGB LED</div>
     </div>
-
-    <!-- Status text -->
     <div class="hero-mid">
       <h2 class="c-green" id="hero-lbl">SECURE</h2>
       <p id="hero-sub">Door closed · Locked · No active alerts</p>
     </div>
-
-    <!-- State badges -->
     <div class="badges">
       <div class="badge door-closed" id="badge-door">
         <div class="badge-lbl">Door</div>
@@ -438,7 +414,6 @@
         <div class="ailabel">Gemini 2.0 Flash</div><br/>
         <span class="aiempty">No shock events. AI assessment activates automatically when the shock sensor fires.</span>
       </div>
-      <!-- Risk Score -->
       <div class="risk-wrap">
         <div class="risk-title">
           <span>AI INTRUSION RISK SCORE</span>
@@ -449,7 +424,6 @@
         </div>
         <div class="risk-level" id="risk-level" style="color:var(--text-muted)">Awaiting analysis…</div>
       </div>
-      <!-- Gemini Key -->
       <div class="aikey">
         <span class="aikey-lbl">GEMINI KEY</span>
         <input id="gemini-inline" type="password" placeholder="AIza…" />
@@ -480,67 +454,31 @@
 
 </div>
 
-
-<!-- ═══════════════════════════════════════════════════════════════════
-  SUPABASE TABLE SETUP SQL  (paste into Supabase SQL editor)
-
-  -- Sensor readings from MCU (via ESP32-S3)
-  -- sensor_type: 'reed' | 'temperature' | 'load' | 'shock'
-  -- reed  value: 0 = CLOSED, 1 = OPEN
-  -- shock value: 1 = triggered
-  -- load  value: grams (calibrated by ESP32)
-  -- temp  value: °C  (from DHT11 on ESP32-S3)
-  CREATE TABLE sensor_logs (
-    id          SERIAL PRIMARY KEY,
-    sensor_type TEXT            NOT NULL,
-    value       FLOAT           NOT NULL,
-    created_at  TIMESTAMPTZ     DEFAULT NOW()
-  );
-
-  -- Commands written by dashboard, polled by ESP32-S3 every 2 s
-  -- command: 'lock' | 'unlock' | 'silence'
-  CREATE TABLE commands (
-    id         SERIAL PRIMARY KEY,
-    command    TEXT        NOT NULL,
-    executed   BOOLEAN     DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  );
-
-  -- Enable Realtime on both tables in Supabase dashboard ↗
-═══════════════════════════════════════════════════════════════════ -->
-
-<!-- API key stuff -->
 <script src="config.js"></script>
-
 <script>
 // ──────────────────────────────────────────────────────────────────
 //  CONFIG
 // ──────────────────────────────────────────────────────────────────
-// v1beta supports all current Gemini models including gemini-2.0-flash
-const GEMINI_URL  = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-
-// SHOCK_RECENT_MS: window in which a shock reading is shown as "TRIGGERED"
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 const SHOCK_RECENT_MS = 60_000;
-// SHOCK_ALARM_MS: window in which the alarm body flash is active
 const SHOCK_ALARM_MS  = 30_000;
 
 // ──────────────────────────────────────────────────────────────────
 //  STATE
 // ──────────────────────────────────────────────────────────────────
-let supa       = null;
-let chart      = null;
-let isDemo     = false;
-let demoTimer  = null;
+let supa          = null;
+let chart         = null;
+let isDemo        = false;
+let demoTimer     = null;
 let riskAnimFrame = null;
 
-// Derived system state (updated from sensor readings + commands)
 const state = {
-  door:       0,       // 0 = CLOSED, 1 = OPEN
-  lock:       0,       // 0 = LOCKED, 1 = UNLOCKED
-  alarm:      false,   // true if recent shock
-  weight:     null,
-  temp:       null,
-  lastShock:  null,    // Date of last shock event
+  door:      0,
+  lock:      0,
+  alarm:     false,
+  weight:    null,
+  temp:      null,
+  lastShock: null,
 };
 
 // ──────────────────────────────────────────────────────────────────
@@ -598,24 +536,19 @@ function pushWeight(w) {
   const lbl = [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
   wHistory.push({ lbl, w });
   if (wHistory.length > 60) wHistory.shift();
-  chart.data.labels              = wHistory.map(p => p.lbl);
-  chart.data.datasets[0].data   = wHistory.map(p => p.w);
+  chart.data.labels            = wHistory.map(p => p.lbl);
+  chart.data.datasets[0].data = wHistory.map(p => p.w);
   chart.update('none');
 }
 
 // ──────────────────────────────────────────────────────────────────
 //  LED / HERO RENDER
-//  Mirrors firmware LED logic in PrisonRealm.c:
-//    door CLOSED + lock LOCKED   → GREEN
-//    door CLOSED + lock UNLOCKED → YELLOW
-//    door OPEN   + lock LOCKED   → ORANGE (blink if alarm)
-//    door OPEN   + lock UNLOCKED → RED    (blink if alarm)
 // ──────────────────────────────────────────────────────────────────
 function getLEDConfig(door, lock, alarm) {
   if (door === 0 && lock === 0) return { color: 'green',  blink: false, cls: 'h-green',  lbl: 'SECURE',           sub: 'Door closed · Locked · No active alerts' };
   if (door === 0 && lock === 1) return { color: 'amber',  blink: false, cls: 'h-amber',  lbl: 'UNLOCKED',         sub: 'Door closed · Unlocked · Ready to open' };
-  if (door === 1 && lock === 0) return { color: 'orange', blink: alarm, cls: 'h-orange', lbl: alarm ? 'ALERT'  : 'DOOR OPEN', sub: alarm ? '⚠ Door open while locked — alarm triggered' : 'Door open · Lock engaged' };
-  if (door === 1 && lock === 1) return { color: 'red',    blink: alarm, cls: 'h-red',    lbl: alarm ? 'ALARM'  : 'OPEN & UNLOCKED', sub: alarm ? '🚨 Alarm active · Door open and unlocked' : 'Door open · Unlocked' };
+  if (door === 1 && lock === 0) return { color: 'orange', blink: alarm, cls: 'h-orange', lbl: alarm ? 'ALERT'   : 'DOOR OPEN',        sub: alarm ? '⚠ Door open while locked — alarm triggered' : 'Door open · Lock engaged' };
+  if (door === 1 && lock === 1) return { color: 'red',    blink: alarm, cls: 'h-red',    lbl: alarm ? 'ALARM'   : 'OPEN & UNLOCKED',  sub: alarm ? '🚨 Alarm active · Door open and unlocked'   : 'Door open · Unlocked' };
   return { color: 'green', blink: false, cls: 'h-green', lbl: 'UNKNOWN', sub: '' };
 }
 
@@ -623,55 +556,47 @@ function renderHero() {
   const alarmActive = state.alarm;
   const cfg = getLEDConfig(state.door, state.lock, alarmActive);
 
-  // Hero card
-  const hero = document.getElementById('hero');
-  hero.className = `hero ${cfg.cls}`;
+  document.getElementById('hero').className = `hero ${cfg.cls}`;
 
-  // LED
   const led = document.getElementById('led');
   led.className = `led c-${cfg.color}${cfg.blink ? ' blink' : ''}`;
 
-  // Label + sub
   const lbl = document.getElementById('hero-lbl');
-  lbl.className = `c-${cfg.color}`;
+  lbl.className   = `c-${cfg.color}`;
   lbl.textContent = cfg.lbl;
   document.getElementById('hero-sub').textContent = cfg.sub;
 
-  // Door badge
-  const bdoor = document.getElementById('badge-door');
+  const bdoor  = document.getElementById('badge-door');
   const bvdoor = document.getElementById('bv-door');
-  bdoor.className = `badge ${state.door ? 'door-open' : 'door-closed'}`;
+  bdoor.className  = `badge ${state.door ? 'door-open' : 'door-closed'}`;
   bvdoor.className = `badge-val ${state.door ? 'c-amber' : 'c-green'}`;
   bvdoor.textContent = state.door ? 'OPEN' : 'CLOSED';
 
-  // Lock badge
-  const block = document.getElementById('badge-lock');
+  const block  = document.getElementById('badge-lock');
   const bvlock = document.getElementById('bv-lock');
-  block.className = `badge ${state.lock ? 'lock-unlocked' : 'lock-locked'}`;
+  block.className  = `badge ${state.lock ? 'lock-unlocked' : 'lock-locked'}`;
   bvlock.className = `badge-val ${state.lock ? 'c-amber' : 'c-green'}`;
   bvlock.textContent = state.lock ? 'UNLOCKED' : 'LOCKED';
 
-  // Alarm badge
-  const balarm = document.getElementById('badge-alarm');
+  const balarm  = document.getElementById('badge-alarm');
   const bvalarm = document.getElementById('bv-alarm');
-  balarm.className = `badge${alarmActive ? ' alarm-active' : ''}`;
-  bvalarm.style.color = alarmActive ? 'var(--orange)' : 'var(--text-muted)';
-  bvalarm.textContent = alarmActive ? 'ACTIVE' : 'INACTIVE';
+  balarm.className      = `badge${alarmActive ? ' alarm-active' : ''}`;
+  bvalarm.style.color   = alarmActive ? 'var(--orange)' : 'var(--text-muted)';
+  bvalarm.textContent   = alarmActive ? 'ACTIVE' : 'INACTIVE';
 
-  // Body alarm flash
   if (alarmActive) document.body.classList.add('alarm-active');
   else             document.body.classList.remove('alarm-active');
 }
 
 // ──────────────────────────────────────────────────────────────────
-//  SENSOR RENDER (called per sensor_logs row)
+//  SENSOR RENDER
 // ──────────────────────────────────────────────────────────────────
 function applySensorReading(sensor_type, value, created_at) {
   const ts = new Date(created_at);
 
   switch (sensor_type) {
     case 'reed': {
-      state.door = value;  // 0 = CLOSED, 1 = OPEN
+      state.door = value;
       const el = document.getElementById('s-reed');
       el.textContent = value ? 'OPEN' : 'CLOSED';
       el.className   = `sv ${value ? 'va' : 'vg'}`;
@@ -692,7 +617,7 @@ function applySensorReading(sensor_type, value, created_at) {
     case 'shock': {
       if (value) {
         state.lastShock = ts;
-        state.alarm = true;
+        state.alarm     = true;
         const el = document.getElementById('s-shock');
         el.textContent = 'TRIGGERED';
         el.className   = 'sv vr';
@@ -701,19 +626,16 @@ function applySensorReading(sensor_type, value, created_at) {
         setTimeout(() => siShock.classList.remove('shock-triggered'), 400);
         document.getElementById('s-shock-time').textContent =
           ts.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        // Trigger AI assessment
         callGemini();
       }
       break;
     }
   }
 
-  // Decay shock display after SHOCK_RECENT_MS
   if (state.lastShock && (Date.now() - state.lastShock.getTime()) > SHOCK_RECENT_MS) {
     document.getElementById('s-shock').textContent = 'CLEAR';
     document.getElementById('s-shock').className   = 'sv vg';
   }
-  // Decay alarm state after SHOCK_ALARM_MS
   if (state.lastShock && (Date.now() - state.lastShock.getTime()) > SHOCK_ALARM_MS) {
     state.alarm = false;
   }
@@ -723,11 +645,10 @@ function applySensorReading(sensor_type, value, created_at) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-//  INITIALISE STATE from snapshot (latest per sensor_type)
+//  SNAPSHOT
 // ──────────────────────────────────────────────────────────────────
 function applySnapshot(rows) {
   if (!rows || rows.length === 0) return;
-  // Find latest row per sensor_type
   const latest = {};
   for (const row of rows) {
     const st = row.sensor_type;
@@ -744,27 +665,26 @@ function applySnapshot(rows) {
 //  EVENT LOG
 // ──────────────────────────────────────────────────────────────────
 const EVENT_LABELS = {
-  'reed':        v => v === 0 ? 'DOOR CLOSED'    : 'DOOR OPENED',
-  'shock':       v => v       ? 'SHOCK TRIGGERED' : 'SHOCK CLEAR',
+  'reed':        v => v === 0 ? 'DOOR CLOSED'     : 'DOOR OPENED',
+  'shock':       v => v       ? 'SHOCK TRIGGERED'  : 'SHOCK CLEAR',
   'load':        v => `WEIGHT: ${Math.round(v)} g`,
   'temperature': v => `TEMP: ${v.toFixed(1)}°C`,
 };
 
 const EVENT_CSS = {
-  'reed-0':    'e-reed-0',
-  'reed-1':    'e-reed-1',
-  'shock':     'e-shock',
-  'load':      'e-load',
-  'temperature':'e-temperature',
-  'lock':      'e-lock',
-  'unlock':    'e-unlock',
-  'silence':   'e-silence',
+  'reed-0':      'e-reed-0',
+  'reed-1':      'e-reed-1',
+  'shock':       'e-shock',
+  'load':        'e-load',
+  'temperature': 'e-temperature',
+  'lock':        'e-lock',
+  'unlock':      'e-unlock',
 };
 
 function renderEventLog(sensorRows, commandRows) {
   const combined = [];
 
-  for (const r of (sensorRows  || [])) {
+  for (const r of (sensorRows || [])) {
     combined.push({
       ts:    new Date(r.created_at),
       label: EVENT_LABELS[r.sensor_type]
@@ -808,92 +728,33 @@ function renderEventLog(sensorRows, commandRows) {
 // ──────────────────────────────────────────────────────────────────
 async function sendCommand(cmd) {
   const el = document.getElementById('cmdst');
-  el.className = 'cmdst';
+  el.className  = 'cmdst';
   el.textContent = `Sending ${cmd.toUpperCase()}…`;
 
-  // Update lock state locally immediately
-  if (cmd === 'lock')    state.lock = 0;
-  if (cmd === 'unlock')  state.lock = 1;
-  // if (cmd === 'silence') { state.alarm = false; animateRiskTo(0); }
+  if (cmd === 'lock')   state.lock = 0;
+  if (cmd === 'unlock') state.lock = 1;
   renderHero();
 
   if (isDemo || !supa) {
-    el.className = 'cmdst ok';
+    el.className   = 'cmdst ok';
     el.textContent = `✓ CMD:${cmd.toUpperCase()} — demo mode (simulated)`;
-    // Add to demo event log
-    addDemoEvent(`CMD: ${cmd.toUpperCase()} ✓`, 'lock');
+    addDemoEvent(`CMD: ${cmd.toUpperCase()} ✓`, cmd);
     return;
   }
 
   try {
     const { error } = await supa.from('commands').insert({ command: cmd, executed: false });
     if (error) throw error;
-    el.className = 'cmdst ok';
+    el.className   = 'cmdst ok';
     el.textContent = `✓ CMD:${cmd.toUpperCase()} queued — ESP32 will execute within 2s`;
   } catch (e) {
-    el.className = 'cmdst err';
+    el.className   = 'cmdst err';
     el.textContent = `✗ Error: ${e.message}`;
-    // Revert local state on failure
     if (cmd === 'lock')   state.lock = 1;
     if (cmd === 'unlock') state.lock = 0;
     renderHero();
   }
 }
-
-// ──────────────────────────────────────────────────────────────────
-//  PIN MODAL
-// ──────────────────────────────────────────────────────────────────
-let pinBuffer = '';
-
-function showPinModal() {
-  pinBuffer = '';
-  document.getElementById('pin-display').textContent = '_';
-  document.getElementById('pin-modal').classList.add('open');
-}
-
-function pinKey(k) {
-  const correctPin = document.getElementById('cfg-pin').value || '2271';
-
-  if (k === 'cancel') {
-    document.getElementById('pin-modal').classList.remove('open');
-    return;
-  }
-  if (k === 'clear') {
-    pinBuffer = '';
-    document.getElementById('pin-display').textContent = '_';
-    return;
-  }
-
-  pinBuffer += k;
-  document.getElementById('pin-display').textContent = '●'.repeat(pinBuffer.length);
-
-  if (pinBuffer.length >= correctPin.length) {
-    if (pinBuffer === correctPin) {
-      document.getElementById('pin-modal').classList.remove('open');
-      pinBuffer = '';
-      sendCommand('unlock');
-    } else {
-      const disp = document.getElementById('pin-display');
-      disp.classList.add('pin-wrong');
-      setTimeout(() => { disp.classList.remove('pin-wrong'); pinBuffer = ''; disp.textContent = '_'; }, 400);
-    }
-  }
-}
-
-// Close modal on backdrop click
-document.getElementById('pin-modal').addEventListener('click', e => {
-  if (e.target === e.currentTarget) {
-    document.getElementById('pin-modal').classList.remove('open');
-  }
-});
-
-// Keyboard PIN input
-document.addEventListener('keydown', e => {
-  if (!document.getElementById('pin-modal').classList.contains('open')) return;
-  if (e.key >= '0' && e.key <= '9') pinKey(e.key);
-  if (e.key === 'Escape' || e.key === 'Enter') pinKey('cancel');
-  if (e.key === 'Backspace') { pinBuffer = pinBuffer.slice(0, -1); document.getElementById('pin-display').textContent = pinBuffer ? '●'.repeat(pinBuffer.length) : '_'; }
-});
 
 // ──────────────────────────────────────────────────────────────────
 //  GEMINI AI
@@ -956,9 +817,9 @@ async function callGemini() {
   setAIThinking();
 
   const ctx = {
-    door:    state.door    ? 'OPEN'      : 'CLOSED',
-    lock:    state.lock    ? 'UNLOCKED'  : 'LOCKED',
-    alarm:   state.alarm   ? 'ACTIVE'    : 'INACTIVE',
+    door:     state.door  ? 'OPEN'     : 'CLOSED',
+    lock:     state.lock  ? 'UNLOCKED' : 'LOCKED',
+    alarm:    state.alarm ? 'ACTIVE'   : 'INACTIVE',
     weight_g: state.weight ?? '(unknown)',
     temp_c:   state.temp   ?? '(unknown)',
   };
@@ -980,16 +841,14 @@ Respond in exactly 2 sentences:
 Plain text only — no markdown, no bullet points.`;
 
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 180, temperature: 0.35 }
-        })
-      }
-    );
+    const res = await fetch(`${GEMINI_URL}?key=${key}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 180, temperature: 0.35 }
+      })
+    });
     if (!res.ok) {
       const e = await res.json();
       setAI(`<span style="color:var(--red)">⚠ Gemini error: ${e?.error?.message || 'HTTP ' + res.status}</span>`);
@@ -999,15 +858,13 @@ Plain text only — no markdown, no bullet points.`;
     const j   = await res.json();
     const txt = j?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response.';
 
-    // Compute risk score from response keywords
     let risk = 50;
-    if (/intrusion|forced|break.?in|genuine|serious|criminal|breach|tamper/i.test(txt))  risk = 85;
-    else if (/unlikely|false.?alarm|accidental|vibration|no immediate/i.test(txt))        risk = 15;
-    if (ctx.door === 'OPEN' && ctx.lock === 'LOCKED')  risk = Math.min(100, risk + 15);
+    if (/intrusion|forced|break.?in|genuine|serious|criminal|breach|tamper/i.test(txt)) risk = 85;
+    else if (/unlikely|false.?alarm|accidental|vibration|no immediate/i.test(txt))      risk = 15;
+    if (ctx.door === 'OPEN' && ctx.lock === 'LOCKED')   risk = Math.min(100, risk + 15);
     if (ctx.door === 'OPEN' && ctx.lock === 'UNLOCKED') risk = Math.min(100, risk + 10);
     updateRiskScore(risk);
 
-    // Highlight key words
     const html = txt
       .replace(/(intrusion|forced|break-in|genuine|immediate|serious|inspect|criminal|breach|tamper)/gi,
                '<strong style="color:var(--red)">$1</strong>')
@@ -1033,10 +890,10 @@ function updateRiskScore(score, labelOverride) {
   fill.style.width = score + '%';
 
   let level, color, glow;
-  if      (score === 0)   { level = 'CLEAR';  color = 'var(--text-muted)'; glow = 'none'; fill.style.background = 'var(--border2)'; }
-  else if (score <= 30)   { level = 'LOW';    color = 'var(--green)';      glow = '0 0 8px #00e67650'; fill.style.background = 'var(--green)'; }
-  else if (score <= 65)   { level = 'MEDIUM'; color = 'var(--amber)';      glow = '0 0 8px #ffd74050'; fill.style.background = 'var(--amber)'; }
-  else                    { level = 'HIGH';   color = 'var(--red)';        glow = '0 0 10px #ff3d3d60'; fill.style.background = 'var(--red)'; }
+  if      (score === 0) { level = 'CLEAR';  color = 'var(--text-muted)'; glow = 'none'; fill.style.background = 'var(--border2)'; }
+  else if (score <= 30) { level = 'LOW';    color = 'var(--green)';      glow = '0 0 8px #00e67650'; fill.style.background = 'var(--green)'; }
+  else if (score <= 65) { level = 'MEDIUM'; color = 'var(--amber)';      glow = '0 0 8px #ffd74050'; fill.style.background = 'var(--amber)'; }
+  else                  { level = 'HIGH';   color = 'var(--red)';        glow = '0 0 10px #ff3d3d60'; fill.style.background = 'var(--red)'; }
 
   fill.style.boxShadow = glow;
   pct.style.color      = color;
@@ -1074,7 +931,6 @@ let cachedCommandRows = [];
 async function connectSupabase(url, anon) {
   supa = window.supabase.createClient(url, anon);
 
-  // Verify tables exist + fetch initial data
   const { data: sRows, error: sErr } = await supa
     .from('sensor_logs').select('*')
     .order('created_at', { ascending: false }).limit(200);
@@ -1084,14 +940,13 @@ async function connectSupabase(url, anon) {
     .from('commands').select('*')
     .order('created_at', { ascending: false }).limit(50);
 
-  cachedSensorRows  = sRows  || [];
-  cachedCommandRows = cRows  || [];
+  cachedSensorRows  = sRows || [];
+  cachedCommandRows = cRows || [];
 
   applySnapshot(cachedSensorRows);
   renderEventLog(cachedSensorRows, cachedCommandRows);
   renderHero();
 
-  // Realtime: new sensor_logs rows
   supa.channel('rt-sensors')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sensor_logs' }, payload => {
       const row = payload.new;
@@ -1102,7 +957,6 @@ async function connectSupabase(url, anon) {
     })
     .subscribe();
 
-  // Realtime: commands table (to reflect executed status in log)
   supa.channel('rt-commands')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'commands' }, async () => {
       const { data } = await supa.from('commands').select('*').order('created_at', { ascending: false }).limit(50);
@@ -1116,12 +970,12 @@ function setConnected(mode) {
   const dot = document.getElementById('conn-dot');
   const lbl = document.getElementById('conn-label');
   if (mode === 'live') {
-    dot.className = 'conn-dot live';
+    dot.className   = 'conn-dot live';
     lbl.textContent = 'CONNECTED';
     lbl.style.color = 'var(--green)';
     document.getElementById('btn-demo').classList.remove('active');
   } else {
-    dot.className = 'conn-dot demo';
+    dot.className   = 'conn-dot demo';
     lbl.textContent = 'DEMO MODE';
     lbl.style.color = 'var(--amber)';
   }
@@ -1143,58 +997,73 @@ function manualConnect() {
 }
 
 // ──────────────────────────────────────────────────────────────────
-//  DEMO MODE
+//  DEMO MODE (toggle)
 // ──────────────────────────────────────────────────────────────────
-let demoTick   = 0;
-let demoWeight = 200;
+let demoTick        = 0;
+let demoWeight      = 200;
 let demoSensorRows  = [];
 let demoCommandRows = [];
 
 const DEMO_SCRIPT = [
-  // [tick, sensor_type, value]
-  [ 3, 'reed', 0],          // door closes
+  [ 3, 'reed', 0],
   [ 5, 'load', 215],
   [ 8, 'temperature', 26.5],
   [12, 'load', 230],
-  [16, 'reed', 1],          // door opens
+  [16, 'reed', 1],
   [18, 'load', 185],
-  [22, 'shock', 1],         // tamper!
+  [22, 'shock', 1],
   [24, 'load', 180],
-  [28, 'reed', 0],          // door closes
+  [28, 'reed', 0],
   [30, 'load', 180],
   [35, 'temperature', 27.1],
   [40, 'load', 178],
 ];
 
-function addDemoEvent(type, sensorOrCmd, value) {
+function addDemoEvent(label, cmd, value) {
   const ts = new Date().toISOString();
-  if (sensorOrCmd === 'lock' || sensorOrCmd === 'unlock' || sensorOrCmd === 'silence') {
-    demoCommandRows.unshift({ id: Date.now(), command: sensorOrCmd, executed: true, created_at: ts });
+  if (cmd === 'lock' || cmd === 'unlock') {
+    demoCommandRows.unshift({ id: Date.now(), command: cmd, executed: true, created_at: ts });
   } else {
-    demoSensorRows.unshift({ id: Date.now(), sensor_type: sensorOrCmd, value: value ?? 0, created_at: ts });
+    demoSensorRows.unshift({ id: Date.now(), sensor_type: cmd, value: value ?? 0, created_at: ts });
   }
   renderEventLog(demoSensorRows, demoCommandRows);
 }
 
 function startDemoMode() {
+  // Toggle off — return to live
+  if (isDemo) {
+    isDemo = false;
+    if (demoTimer) clearInterval(demoTimer);
+    document.getElementById('btn-demo').classList.remove('active');
+    connectSupabase(SUPA_URL, SUPA_ANON)
+      .then(() => setConnected('live'))
+      .catch(() => {
+        document.getElementById('cfg-banner').style.display = 'flex';
+        document.getElementById('conn-dot').className  = 'conn-dot';
+        document.getElementById('conn-label').textContent = 'DISCONNECTED';
+        document.getElementById('conn-label').style.color = '';
+      });
+    return;
+  }
+
+  // Toggle on
   isDemo = true;
+  if (supa) supa.removeAllChannels();
   document.getElementById('cfg-banner').style.display = 'none';
   document.getElementById('btn-demo').classList.add('active');
   setConnected('demo');
 
-  // Reset state
   Object.assign(state, { door: 1, lock: 1, alarm: false, weight: null, temp: null, lastShock: null });
   demoSensorRows  = [];
   demoCommandRows = [];
-  demoTick = 0;
+  demoTick   = 0;
   demoWeight = 200;
 
-  // Seed some initial data
   const now = new Date();
   demoSensorRows = [
-    { id: 1, sensor_type: 'reed',        value: 1,    created_at: new Date(now-30000).toISOString() },
-    { id: 2, sensor_type: 'load',        value: 200,  created_at: new Date(now-25000).toISOString() },
-    { id: 3, sensor_type: 'temperature', value: 26.3, created_at: new Date(now-20000).toISOString() },
+    { id: 1, sensor_type: 'reed',        value: 1,    created_at: new Date(now - 30000).toISOString() },
+    { id: 2, sensor_type: 'load',        value: 200,  created_at: new Date(now - 25000).toISOString() },
+    { id: 3, sensor_type: 'temperature', value: 26.3, created_at: new Date(now - 20000).toISOString() },
   ];
   applySnapshot(demoSensorRows);
   renderEventLog(demoSensorRows, []);
@@ -1210,10 +1079,9 @@ function startDemoMode() {
   demoTimer = setInterval(() => {
     demoTick++;
 
-    // Run scripted events
     for (const [tick, type, val] of DEMO_SCRIPT) {
       if (demoTick === tick) {
-        const ts = new Date().toISOString();
+        const ts  = new Date().toISOString();
         const row = { id: Date.now() + Math.random(), sensor_type: type, value: val, created_at: ts };
         demoSensorRows.unshift(row);
         applySensorReading(type, val, ts);
@@ -1221,13 +1089,11 @@ function startDemoMode() {
       }
     }
 
-    // Add random weight noise every 4 ticks
     if (demoTick % 4 === 0) {
       demoWeight = Math.max(0, demoWeight + (Math.random() > .5 ? Math.random() * 5 : -Math.random() * 5));
       pushWeight(Math.round(demoWeight));
     }
 
-    // Loop after script
     if (demoTick > 45) {
       demoTick = 0;
       Object.assign(state, { door: 1, lock: 1, alarm: false, weight: null, temp: null, lastShock: null });
@@ -1246,7 +1112,6 @@ window.addEventListener('load', () => {
   initChart();
   renderHero();
 
-  // Auto-fill Gemini key and verify it
   if (GEMINI_KEY) {
     document.getElementById('gemini-inline').value = GEMINI_KEY;
     document.getElementById('cfg-gemini').value    = GEMINI_KEY;
@@ -1261,9 +1126,9 @@ window.addEventListener('load', () => {
       })
       .catch(() => {
         document.getElementById('cfg-banner').style.display = 'flex';
-        document.getElementById('conn-dot').className = 'conn-dot';
-        document.getElementById('conn-label').textContent = 'DISCONNECTED';
-        document.getElementById('conn-label').style.color = '';
+        document.getElementById('conn-dot').className       = 'conn-dot';
+        document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+        document.getElementById('conn-label').style.color   = '';
       });
   }, 500);
 });

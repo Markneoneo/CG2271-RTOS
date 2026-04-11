@@ -7,8 +7,8 @@
 
 #include "hx711.h"
 
-#define HX711_DOUT_PIN  4 // PTA 4
-#define HX711_SCK_PIN   5 // PTA 5
+#define HX711_DOUT_PIN  0 // PTB 0
+#define HX711_SCK_PIN   1 // PTB 1
 static const int32_t HX711_OFFSET = 576950;
 static const int32_t HX711_SCALE  = 398;
 
@@ -16,35 +16,35 @@ void initHX711() {
 	// DOUT is HIGH when data is not ready.
 	// SCK should be set to LOW. When DOUT goes low, pulse SCK 25 times to read in 24 bits.
 	// DOUT will go back HIGH on the 25th pulse.
-	SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK;
+	SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK;
 
 	// Set as GPIO
-	PORTA->PCR[HX711_DOUT_PIN] &= ~PORT_PCR_MUX_MASK;
-	PORTA->PCR[HX711_DOUT_PIN] |= PORT_PCR_MUX(1);
-	PORTA->PCR[HX711_SCK_PIN] &= ~PORT_PCR_MUX_MASK;
-	PORTA->PCR[HX711_SCK_PIN] |= PORT_PCR_MUX(1);
+	PORTB->PCR[HX711_DOUT_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[HX711_DOUT_PIN] |= PORT_PCR_MUX(1);
+	PORTB->PCR[HX711_SCK_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[HX711_SCK_PIN] |= PORT_PCR_MUX(1);
 
 	// Set DOUT input, SCK output
-	GPIOA->PDDR &= ~(1 << HX711_DOUT_PIN);
-	GPIOA->PDDR |= (1 << HX711_SCK_PIN);
+	GPIOB->PDDR &= ~(1 << HX711_DOUT_PIN);
+	GPIOB->PDDR |= (1 << HX711_SCK_PIN);
 
 	// Set SCK LOW
-	GPIOA->PCOR |= (1 << HX711_SCK_PIN);
+	GPIOB->PCOR |= (1 << HX711_SCK_PIN);
 }
 
 bool hx711IsReady(void) {
 	// Returns true if DOUT reads 0
-	return !(GPIOA->PDIR & (1 << HX711_DOUT_PIN));
+	return !(GPIOB->PDIR & (1 << HX711_DOUT_PIN));
 }
 
 static inline void hx711SCKHigh(void) {
 	// drive SCK pin high
-	GPIOA->PSOR |= (1 << HX711_SCK_PIN);
+	GPIOB->PSOR |= (1 << HX711_SCK_PIN);
 }
 
 static inline void hx711SCKLow(void) {
 	// drive SCK pin low
-	GPIOA->PCOR |= (1 << HX711_SCK_PIN);
+	GPIOB->PCOR |= (1 << HX711_SCK_PIN);
 }
 
 static int hx711ReadBit(void) {
@@ -52,7 +52,7 @@ static int hx711ReadBit(void) {
 
 	hx711SCKHigh();
 
-	bit = (GPIOA->PDIR & (1 << HX711_DOUT_PIN)) ? 1 : 0;
+	bit = (GPIOB->PDIR & (1 << HX711_DOUT_PIN)) ? 1 : 0;
 
 	hx711SCKLow();
 

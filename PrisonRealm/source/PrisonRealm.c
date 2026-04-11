@@ -22,6 +22,7 @@
 #include "queue.h"
 #include "timers.h"
 #include <semphr.h>
+#include "core_json.h"
 
 #include "servo.h"
 #include "rgb.h"
@@ -394,11 +395,45 @@ void sendMessage(char *message) {
 	UART2->C2 |= UART_C2_TE_MASK;
 }
 
+CommandType parseCommand(char *jsonBuffer, size_t jsonLength) {
+	JSONStatus_t result;
+
+	// Check if json is valid
+	result = JSON_Validate(jsonBuffer, jsonLength);
+	if (result != JSONSuccess) {
+		return CMD_INVALID;
+	}
+
+	// Try to find a "command field"
+	char queryKey[] = "command";
+	size_t queryKeyLength = sizeof(queryKey) - 1;
+	char *value;
+	size_t valueLength;
+	result = JSON_Search(jsonBuffer, jsonLength, queryKey, queryKeyLength,
+			&value, &valueLength);
+
+	if (result != JSONSuccess) {
+		return CMD_INVALID;
+	}
+
+	// Parse the value
+	char save = value[valueLength];
+	value[valueLength] = '\0';
+	CommandType cmd = (CommandType) atoi(value);
+	value[valueLength] = save;
+
+	return cmd;
+}
+
 static void recvTask(void *p) {
 	while (1) {
 		TMessage msg;
-		xQueueReceive(queue, (TMessage*) &msg, portMAX_DELAY);
-		PRINTF("Received message: %s\r\n", msg.message);
+		if (xQueueReceive(queue, (TMessage*) &msg, portMAX_DELAY) == pdTRUE) {
+			PRINTF("Received message: %s\r\n", msg.message);
+			CommandType cmd = parseCommand(msg.message, strlen(msg.message));
+			PRINTF("Received command: %d\r\n", cmd);
+
+		}
 	}
 }
 
@@ -433,37 +468,34 @@ static void ledTask(void *p) {
 	while (1) {
 		blink = !blink; // for toggling
 
-	    SystemState s;
+		SystemState s;
 
-	    xSemaphoreTake(systemStateMutex, portMAX_DELAY);
-	    s = systemState;
-	    xSemaphoreGive(systemStateMutex);
+		xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+		s = systemState;
+		xSemaphoreGive(systemStateMutex);
 
-	    // LED behavior:
-	    // door CLOSED, lock   LOCKED: GREEN
-	    // door CLOSED, lock UNLOCKED: YELLOW
-	    // door   OPEN, lock   LOCKED: ORANGE (BLINKING AFTER 2S, SYNCED TO ALARM)
-	    // door   OPEN, lock UNLOCKED:    RED (BLINKING AFTER 2S, SYNCED TO ALARM)
-	    if (s.door == CLOSED && s.lock == LOCKED) {
-	        setRGB(0,255,0); // green
-	    }
-	    else if (s.door == CLOSED && s.lock == UNLOCKED) {
-	        setRGB(255,180,0); // yellow
-	    }
-	    else if (s.door == OPEN && s.lock == LOCKED) {
-	    	if ((s.alarm == ALARM_ACTIVE && blink) || s.alarm == ALARM_INACTIVE)
-	            setRGB(255,50,0);
-	        else
-	            setRGB(0,0,0);
-	    }
-	    else if (s.door == OPEN && s.lock == UNLOCKED) {
-	    	if ((s.alarm == ALARM_ACTIVE && blink) || s.alarm == ALARM_INACTIVE)
-	            setRGB(255,0,0);
-	        else
-	            setRGB(0,0,0);
-	    }
+		// LED behavior:
+		// door CLOSED, lock   LOCKED: GREEN
+		// door CLOSED, lock UNLOCKED: YELLOW
+		// door   OPEN, lock   LOCKED: ORANGE (BLINKING AFTER 2S, SYNCED TO ALARM)
+		// door   OPEN, lock UNLOCKED:    RED (BLINKING AFTER 2S, SYNCED TO ALARM)
+		if (s.door == CLOSED && s.lock == LOCKED) {
+			setRGB(0, 255, 0); // green
+		} else if (s.door == CLOSED && s.lock == UNLOCKED) {
+			setRGB(255, 180, 0); // yellow
+		} else if (s.door == OPEN && s.lock == LOCKED) {
+			if ((s.alarm == ALARM_ACTIVE && blink) || s.alarm == ALARM_INACTIVE)
+				setRGB(255, 50, 0);
+			else
+				setRGB(0, 0, 0);
+		} else if (s.door == OPEN && s.lock == UNLOCKED) {
+			if ((s.alarm == ALARM_ACTIVE && blink) || s.alarm == ALARM_INACTIVE)
+				setRGB(255, 0, 0);
+			else
+				setRGB(0, 0, 0);
+		}
 
-	    vTaskDelay(pdMS_TO_TICKS(200));
+		vTaskDelay(pdMS_TO_TICKS(200));
 	}
 }
 
@@ -492,81 +524,79 @@ static void initSystemState() {
 	systemStateMutex = xSemaphoreCreateMutex();
 }
 
-
-
 static void servoTestTask(void *p) {
 
 	static bool servoTestLockState = false; // local toggle state
-    while (1) {
-        servoTestLockState = !servoTestLockState;
-        PRINTF("Toggling servo lock state.\r\n");
-        setLockState(servoTestLockState ? LOCKED : UNLOCKED);
+	while (1) {
+		servoTestLockState = !servoTestLockState;
+		PRINTF("Toggling servo lock state.\r\n");
+		setLockState(servoTestLockState ? LOCKED : UNLOCKED);
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
+		vTaskDelay(pdMS_TO_TICKS(1000));
+	}
 }
 
 void initSW2(void) {
-    NVIC_DisableIRQ(PORTC_PORTD_IRQn);
-    SIM->SCGC5 |= SIM_SCGC5_PORTC_MASK;
+	NVIC_DisableIRQ(PORTC_PORTD_IRQn);
+	SIM->SCGC5 |= SIM_SCGC5_PORTC_MASK;
 
-    PORTC->PCR[SWITCH_PIN] &= ~PORT_PCR_MUX_MASK;
-    PORTC->PCR[SWITCH_PIN] |=  PORT_PCR_MUX(1);
+	PORTC->PCR[SWITCH_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTC->PCR[SWITCH_PIN] |= PORT_PCR_MUX(1);
 
-    // Enable internal pull-up
-    PORTC->PCR[SWITCH_PIN] |= PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+	// Enable internal pull-up
+	PORTC->PCR[SWITCH_PIN] |= PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
 
-    GPIOC->PDDR &= ~(1 << SWITCH_PIN);
+	GPIOC->PDDR &= ~(1 << SWITCH_PIN);
 
-    // Falling edge (active-low button)
-    PORTC->PCR[SWITCH_PIN] &= ~PORT_PCR_IRQC_MASK;
-    PORTC->PCR[SWITCH_PIN] |=  PORT_PCR_IRQC(0b1010);
+	// Falling edge (active-low button)
+	PORTC->PCR[SWITCH_PIN] &= ~PORT_PCR_IRQC_MASK;
+	PORTC->PCR[SWITCH_PIN] |= PORT_PCR_IRQC(0b1010);
 
-    NVIC_SetPriority(PORTC_PORTD_IRQn, 192);
-    NVIC_ClearPendingIRQ(PORTC_PORTD_IRQn);
-    NVIC_EnableIRQ(PORTC_PORTD_IRQn);
+	NVIC_SetPriority(PORTC_PORTD_IRQn, 192);
+	NVIC_ClearPendingIRQ(PORTC_PORTD_IRQn);
+	NVIC_EnableIRQ(PORTC_PORTD_IRQn);
 }
 
 static void rgbTestTask(void *p) {
-    SystemState testState;
-    uint8_t step = 0;
+	SystemState testState;
+	uint8_t step = 0;
 
-    while (1) {
-        switch (step % 4) {
-            case 0: // Door CLOSED, Lock LOCKED, Alarm inactive
-                testState.door  = CLOSED;
-                testState.lock  = LOCKED;
-                testState.alarm = ALARM_INACTIVE;
-                PRINTF("Should see GREEN\r\n");
-                break;
-            case 1: // Door CLOSED, Lock UNLOCKED, Alarm inactive
-                testState.door  = CLOSED;
-                testState.lock  = UNLOCKED;
-                testState.alarm = ALARM_INACTIVE;
-                PRINTF("Should see YELLOW\r\n");
-                break;
-            case 2: // Door OPEN, Lock LOCKED, Alarm active (blinking)
-                testState.door  = OPEN;
-                testState.lock  = LOCKED;
-                testState.alarm = ALARM_ACTIVE;
-                PRINTF("Should see BLINKING ORANGE\r\n");
-                break;
-            case 3: // Door OPEN, Lock UNLOCKED, Alarm active (blinking)
-                testState.door  = OPEN;
-                testState.lock  = UNLOCKED;
-                testState.alarm = ALARM_ACTIVE;
-                PRINTF("Should see BLINKING RED\r\n");
-                break;
-        }
+	while (1) {
+		switch (step % 4) {
+		case 0: // Door CLOSED, Lock LOCKED, Alarm inactive
+			testState.door = CLOSED;
+			testState.lock = LOCKED;
+			testState.alarm = ALARM_INACTIVE;
+			PRINTF("Should see GREEN\r\n");
+			break;
+		case 1: // Door CLOSED, Lock UNLOCKED, Alarm inactive
+			testState.door = CLOSED;
+			testState.lock = UNLOCKED;
+			testState.alarm = ALARM_INACTIVE;
+			PRINTF("Should see YELLOW\r\n");
+			break;
+		case 2: // Door OPEN, Lock LOCKED, Alarm active (blinking)
+			testState.door = OPEN;
+			testState.lock = LOCKED;
+			testState.alarm = ALARM_ACTIVE;
+			PRINTF("Should see BLINKING ORANGE\r\n");
+			break;
+		case 3: // Door OPEN, Lock UNLOCKED, Alarm active (blinking)
+			testState.door = OPEN;
+			testState.lock = UNLOCKED;
+			testState.alarm = ALARM_ACTIVE;
+			PRINTF("Should see BLINKING RED\r\n");
+			break;
+		}
 
-        // Update the global systemState with mutex protection
-        xSemaphoreTake(systemStateMutex, portMAX_DELAY);
-        systemState = testState;
-        xSemaphoreGive(systemStateMutex);
+		// Update the global systemState with mutex protection
+		xSemaphoreTake(systemStateMutex, portMAX_DELAY);
+		systemState = testState;
+		xSemaphoreGive(systemStateMutex);
 
-        step++;
-        vTaskDelay(pdMS_TO_TICKS(2000)); // 5s per state
-    }
+		step++;
+		vTaskDelay(pdMS_TO_TICKS(2000)); // 5s per state
+	}
 }
 
 /*
@@ -610,21 +640,22 @@ int main(void) {
 	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
 	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 50, NULL, 2,
-		&reedTaskHandle);
+			&reedTaskHandle);
 	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 50, NULL, 3,
 	NULL);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
 	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 1,
-		&servoTaskHandle);
+			&servoTaskHandle);
 
 	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
-		&shockTaskHandle);
-	xTaskCreate(sendStateTask, "sendStateTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
-		&sendStateTaskHandle);
+			&shockTaskHandle);
+	xTaskCreate(sendStateTask, "sendStateTask", configMINIMAL_STACK_SIZE + 100,
+	NULL, 1, &sendStateTaskHandle);
 	xTaskCreate(ledTask, "ledTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
-	xTaskCreate(sendSensorDataTask, "sendSensorDataTask", configMINIMAL_STACK_SIZE + 100,
+	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
+	configMINIMAL_STACK_SIZE + 100,
 	NULL, 2, NULL);
 
 	PRINTF("Free heap: %d\r\n", xPortGetFreeHeapSize());

@@ -379,18 +379,10 @@
     <div class="card">
       <div class="ct"><div class="dot"></div> Remote Control</div>
       <div class="cbtns">
-        <button class="cbtn cu" onclick="showPinModal()">🔓 Unlock Door</button>
+        <button class="cbtn cu" onclick="sendCommand('unlock')">🔓 Unlock Door</button>
         <button class="cbtn cl" onclick="sendCommand('lock')">🔒 Lock Door</button>
-        <button class="cbtn cs" onclick="sendCommand('silence')">🔕 Silence Alarm</button>
       </div>
       <div class="cmdst" id="cmdst">Awaiting command…</div>
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-        <div class="cfg-sec-title" style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Unlock PIN</div>
-        <div class="cfg-row">
-          <input id="cfg-pin" style="width:100%;background:#0a1520;border:1px solid var(--border2);border-radius:var(--r);padding:7px 12px;font-family:var(--mono);font-size:13px;color:var(--text);outline:none;letter-spacing:4px" type="password" maxlength="8" placeholder="••••" value="2271" />
-        </div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text-muted);margin-top:5px">Matches physical keypad PIN</div>
-      </div>
     </div>
 
     <!-- Sensors -->
@@ -488,28 +480,6 @@
 
 </div>
 
-<!-- PIN UNLOCK MODAL -->
-<div class="modal-backdrop" id="pin-modal">
-  <div class="modal">
-    <h3>🔓 Unlock Authentication</h3>
-    <p>Enter PIN to send unlock command</p>
-    <div class="pin-display" id="pin-display">_</div>
-    <div class="pin-grid">
-      <button class="pin-btn" onclick="pinKey('1')">1</button>
-      <button class="pin-btn" onclick="pinKey('2')">2</button>
-      <button class="pin-btn" onclick="pinKey('3')">3</button>
-      <button class="pin-btn" onclick="pinKey('4')">4</button>
-      <button class="pin-btn" onclick="pinKey('5')">5</button>
-      <button class="pin-btn" onclick="pinKey('6')">6</button>
-      <button class="pin-btn" onclick="pinKey('7')">7</button>
-      <button class="pin-btn" onclick="pinKey('8')">8</button>
-      <button class="pin-btn" onclick="pinKey('9')">9</button>
-      <button class="pin-btn special" onclick="pinKey('clear')">CLR</button>
-      <button class="pin-btn" onclick="pinKey('0')">0</button>
-      <button class="pin-btn special" onclick="pinKey('cancel')">✕</button>
-    </div>
-  </div>
-</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════
   SUPABASE TABLE SETUP SQL  (paste into Supabase SQL editor)
@@ -844,7 +814,7 @@ async function sendCommand(cmd) {
   // Update lock state locally immediately
   if (cmd === 'lock')    state.lock = 0;
   if (cmd === 'unlock')  state.lock = 1;
-  if (cmd === 'silence') { state.alarm = false; animateRiskTo(0); }
+  // if (cmd === 'silence') { state.alarm = false; animateRiskTo(0); }
   renderHero();
 
   if (isDemo || !supa) {

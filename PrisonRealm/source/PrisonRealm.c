@@ -51,8 +51,6 @@ char send_buffer[MAX_MSG_LEN];
 // Reed Sensor and Buzzer
 #define REED_PIN        12 // PTA12
 #define BUZZER_PIN      13 // PTA13
-#define DOOR_OPEN       0
-#define DOOR_CLOSED     1
 #define TIMER_DELAY     2000 // 2s or 2000 ms
 
 // Shock Sensor
@@ -334,11 +332,11 @@ static void reedTask(void *p) {
 			setAlarmState(ALARM_INACTIVE);
 			xTimerStop(reedAlarmTimer, 0);
 			GPIOA->PCOR |= (1 << BUZZER_PIN);
-			reedData.value = DOOR_CLOSED;
+			reedData.value = (uint32_t) CLOSED;
 			break;
 		case DOOR_OPEN:
 			xTimerStart(reedAlarmTimer, 0);
-			reedData.value = DOOR_OPEN;
+			reedData.value = (uint32_t) OPEN;
 			break;
 		default:
 			break;

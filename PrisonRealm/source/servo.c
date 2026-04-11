@@ -12,10 +12,14 @@
 #define SERVO_MIN_US     100
 #define SERVO_MAX_US     3500
 
-#define UNLOCK_POSITION  1500
+#define UNLOCK_POSITION  500
 #define LOCK_POSITION    2500
 
 void initServo(void) {
+
+	// Enable MCGIRCLK
+	MCG->C1 |= MCG_C1_IRCLKEN_MASK;
+	MCG->C2 |= MCG_C2_IRCS_MASK;
 
 	// Turn on clock gating
 	SIM->SCGC6 |= SIM_SCGC6_TPM1_MASK;

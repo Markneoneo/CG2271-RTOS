@@ -307,10 +307,10 @@ void reedDebouncedCallback(TimerHandle_t xTimer) {
 	// Check if rising or falling edge
 	if (GPIOA->PDIR & (1 << REED_PIN)) {
 		// Pin is 1, rising edge
-		event = DOOR_CLOSED;
+		event = (uint32_t) CLOSED;
 	} else {
 		// Falling edge
-		event = DOOR_OPEN;
+		event = (uint32_t) OPEN;
 	}
 	xTaskNotify(reedTaskHandle, event, eSetValueWithOverwrite);
 }
@@ -324,17 +324,17 @@ static void reedTask(void *p) {
 		TSensorData reedData;
 		reedData.sensor = SENSOR_REED;
 
-		setDoorState((event == DOOR_CLOSED) ? CLOSED : OPEN);
+		setDoorState((event == CLOSED) ? CLOSED : OPEN);
 
 		// Actions
 		switch (event) {
-		case DOOR_CLOSED:
+		case CLOSED:
 			setAlarmState(ALARM_INACTIVE);
 			xTimerStop(reedAlarmTimer, 0);
 			GPIOA->PCOR |= (1 << BUZZER_PIN);
 			reedData.value = (uint32_t) CLOSED;
 			break;
-		case DOOR_OPEN:
+		case OPEN:
 			xTimerStart(reedAlarmTimer, 0);
 			reedData.value = (uint32_t) OPEN;
 			break;
@@ -433,10 +433,24 @@ static void recvTask(void *p) {
 	while (1) {
 		TMessage msg;
 		if (xQueueReceive(queue, (TMessage*) &msg, portMAX_DELAY) == pdTRUE) {
-			PRINTF("Received message: %s\r\n", msg.message);
+			PRINTF("Received message: %s\r", msg.message);
 			CommandType cmd = parseCommand(msg.message, strlen(msg.message));
 			PRINTF("Received command: %d\r\n", cmd);
 
+			switch (cmd) {
+			case (CMD_LOCK):
+				PRINTF("Locking Door.\r\n");
+				setLockState(LOCKED);
+				break;
+			case (CMD_UNLOCK):
+				PRINTF("Unlocking Door.\r\n");
+				setLockState(UNLOCKED);
+				break;
+			default:
+				PRINTF("Invalid command.\r\n");
+				break;
+			}
+			PRINTF("\n");
 		}
 	}
 }
@@ -454,16 +468,22 @@ static void servoTask(void *p) {
 	while (1) {
 		// Wait until something changes
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		PRINTF("servoTask: notified, lock=%d\r\n", systemState.lock);
 		SystemState s;
 
 		xSemaphoreTake(systemStateMutex, portMAX_DELAY);
 		s = systemState;
 		xSemaphoreGive(systemStateMutex);
 
+		PRINTF("semaphore done");
+
+		PRINTF("servoTask: lock=%d CnV before=%d\r\n", s.lock,
+				TPM1->CONTROLS[1].CnV);
 		if (s.lock == LOCKED)
 			servoLock();
 		else
 			servoUnlock();
+		PRINTF("servoTask: CnV after=%d\r\n", TPM1->CONTROLS[1].CnV);
 	}
 }
 
@@ -643,7 +663,6 @@ int main(void) {
 	shockDebounceTimer = xTimerCreate("Shock Debounce", pdMS_TO_TICKS(50),
 	pdFALSE, NULL, shockDebouncedCallback);
 
-
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
 	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
@@ -654,7 +673,7 @@ int main(void) {
 	NULL);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
-	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 1,
+	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 4,
 			&servoTaskHandle);
 
 	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,

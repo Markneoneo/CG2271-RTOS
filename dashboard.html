@@ -545,11 +545,26 @@ function pushWeight(w) {
 //  LED / HERO RENDER
 // ──────────────────────────────────────────────────────────────────
 function getLEDConfig(door, lock, alarm) {
-  if (door === 0 && lock === 0) return { color: 'green',  blink: false, cls: 'h-green',  lbl: 'SECURE',           sub: 'Door closed · Locked · No active alerts' };
-  if (door === 0 && lock === 1) return { color: 'amber',  blink: false, cls: 'h-amber',  lbl: 'UNLOCKED',         sub: 'Door closed · Unlocked · Ready to open' };
-  if (door === 1 && lock === 0) return { color: 'orange', blink: alarm, cls: 'h-orange', lbl: alarm ? 'ALERT'   : 'DOOR OPEN',        sub: alarm ? '⚠ Door open while locked — alarm triggered' : 'Door open · Lock engaged' };
-  if (door === 1 && lock === 1) return { color: 'red',    blink: alarm, cls: 'h-red',    lbl: alarm ? 'ALARM'   : 'OPEN & UNLOCKED',  sub: alarm ? '🚨 Alarm active · Door open and unlocked'   : 'Door open · Unlocked' };
-  return { color: 'green', blink: false, cls: 'h-green', lbl: 'UNKNOWN', sub: '' };
+  // closed is 0, open is 1
+  // locked is 0, unlocked is 1
+  
+  // closed + locked
+  if (door === 0 && lock === 0)
+    return { color: 'green', cls: 'h-green', lbl: 'SECURE', sub: 'Door closed · Locked · No active alerts' };
+
+  // closed + unlocked
+  if (door === 0 && lock === 1)
+    return { color: 'amber', cls: 'h-amber', lbl: 'UNLOCKED', sub: 'Door closed · Unlocked · Ready to open' };
+
+  // open + locked
+  if (door === 1 && lock === 0)
+    return { color: 'orange', cls: 'h-orange', lbl: 'DOOR OPEN', sub: 'Door open · Lock engaged' };
+
+  // open + unlocked
+  if (door === 1 && lock === 1)
+    return { color: 'red', cls: 'h-red', lbl: 'OPEN & UNLOCKED', sub: 'Door open · Unlocked' };
+
+  return { color: 'green', cls: 'h-green', lbl: 'UNKNOWN', sub: '' };
 }
 
 function renderHero() {
@@ -559,7 +574,7 @@ function renderHero() {
   document.getElementById('hero').className = `hero ${cfg.cls}`;
 
   const led = document.getElementById('led');
-  led.className = `led c-${cfg.color}${cfg.blink ? ' blink' : ''}`;
+  led.className = `led c-${cfg.color}`;
 
   const lbl = document.getElementById('hero-lbl');
   lbl.className   = `c-${cfg.color}`;
@@ -665,7 +680,7 @@ function applySnapshot(rows) {
 //  EVENT LOG
 // ──────────────────────────────────────────────────────────────────
 const EVENT_LABELS = {
-  'reed':        v => v === 0 ? 'DOOR CLOSED'     : 'DOOR OPENED',
+  'reed':        v => v === 0 ? 'DOOR OPENED'     : 'DOOR CLOSED',
   'shock':       v => v       ? 'SHOCK TRIGGERED'  : 'SHOCK CLEAR',
   'load':        v => `WEIGHT: ${Math.round(v)} g`,
   'temperature': v => `TEMP: ${v.toFixed(1)}°C`,

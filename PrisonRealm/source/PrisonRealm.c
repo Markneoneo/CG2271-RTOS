@@ -32,6 +32,8 @@
 
 static SystemState systemState;
 SemaphoreHandle_t systemStateMutex;
+SemaphoreHandle_t txDoneSem;
+
 // systemState contains lockState and doorState.
 // Needs to be mutexed since reed and UART write to it, and LED / ESP32 reads.
 
@@ -56,6 +58,7 @@ char send_buffer[MAX_MSG_LEN];
 // Shock Sensor
 #define SHOCK_PIN       2 // PTD 2
 
+#define HX711_TASK_DELAY 5000 // 5s
 #define SWITCH_PIN 3 // SW2, PTC3
 #define QLEN	5
 
@@ -147,6 +150,9 @@ void UART2_FLEXIO_IRQHandler(void) {
 
 			// Disable the transmitter
 			UART2->C2 &= ~UART_C2_TE_MASK;
+			BaseType_t hpw = pdFALSE;
+			xSemaphoreGiveFromISR(txDoneSem, &hpw); // Returns the sem
+			portYIELD_FROM_ISR(hpw);
 		} else {
 			UART2->D = send_buffer[send_ptr++];
 		}
@@ -270,7 +276,7 @@ void hx711Task(void *p) {
 		}
 		hx711Data.value = sum / HX711_N;
 		xQueueSend(sensorDataQueue, &hx711Data, portMAX_DELAY);
-		vTaskDelay(pdMS_TO_TICKS(1000));
+		vTaskDelay(pdMS_TO_TICKS(HX711_TASK_DELAY));
 	}
 }
 
@@ -441,6 +447,7 @@ static void sendTask(void *p) {
 	while (1) {
 		TMessage msg;
 		xQueueReceive(msgQueue, &msg, portMAX_DELAY);
+		xSemaphoreTake(txDoneSem, portMAX_DELAY); // blocks until prev TX is done
 		sendMessage(msg.message);
 	}
 }
@@ -510,7 +517,7 @@ static void sendStateTask(void *p) {
 		xSemaphoreGive(systemStateMutex);
 		TMessage msg;
 		snprintf(msg.message, MAX_MSG_LEN,
-				"{\"type\":\"state\",\"door\":%d,\"lock\":%d,\"alarm\":%d}\r\n",
+				"{\"type\":\"state\", \"door\":%d, \"lock\":%d, \"alarm\":%d}\r\n",
 				s.door, s.lock, s.alarm);
 		PRINTF("Sending message: %s", msg.message);
 		xQueueSend(msgQueue, &msg, portMAX_DELAY);
@@ -626,6 +633,10 @@ int main(void) {
 	msgQueue = xQueueCreate(QLEN, sizeof(TMessage));
 	sensorDataQueue = xQueueCreate(QLEN, sizeof(TSensorData));
 
+	alarmTriggered = xSemaphoreCreateBinary();
+	txDoneSem = xSemaphoreCreateBinary();
+	xSemaphoreGive(txDoneSem);
+
 	reedDebounceTimer = xTimerCreate("Debounce Timer", pdMS_TO_TICKS(50),
 	pdFALSE,
 	NULL, reedDebouncedCallback);
@@ -633,7 +644,7 @@ int main(void) {
 	pdFALSE, NULL, reedAlarmCallback);
 	shockDebounceTimer = xTimerCreate("Shock Debounce", pdMS_TO_TICKS(50),
 	pdFALSE, NULL, shockDebouncedCallback);
-	alarmTriggered = xSemaphoreCreateBinary();
+
 
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);

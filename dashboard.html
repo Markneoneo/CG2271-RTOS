@@ -662,18 +662,18 @@ function applySensorReading(sensor_type, value, created_at) {
 // ──────────────────────────────────────────────────────────────────
 //  SNAPSHOT
 // ──────────────────────────────────────────────────────────────────
-function applySnapshot(rows) {
-  if (!rows || rows.length === 0) return;
-  const latest = {};
-  for (const row of rows) {
-    const st = row.sensor_type;
-    if (!latest[st] || new Date(row.created_at) > new Date(latest[st].created_at)) {
-      latest[st] = row;
-    }
-  }
-  for (const row of Object.values(latest)) {
-    applySensorReading(row.sensor_type, row.value, row.created_at);
-  }
+async function fetchState() {
+  const { data, error } = await supa
+    .from('state')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+  if (error || !data) return;
+  state.door  = data.is_door_open   ? 1 : 0;
+  state.lock  = data.is_door_locked ? 0 : 1; // locked=0, unlocked=1
+  state.alarm = data.is_alarm_on;
+  renderHero();
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -958,9 +958,19 @@ async function connectSupabase(url, anon) {
   cachedSensorRows  = sRows || [];
   cachedCommandRows = cRows || [];
 
-  applySnapshot(cachedSensorRows);
+  fetchState()
   renderEventLog(cachedSensorRows, cachedCommandRows);
   renderHero();
+
+  supa.channel('rt-state')
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'state' }, payload => {
+      const d = payload.new;
+      state.door  = d.is_door_open   ? 1 : 0;
+      state.lock  = d.is_door_locked ? 0 : 1;
+      state.alarm = d.is_alarm_on;
+      renderHero();
+  })
+  .subscribe();
 
   supa.channel('rt-sensors')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sensor_logs' }, payload => {

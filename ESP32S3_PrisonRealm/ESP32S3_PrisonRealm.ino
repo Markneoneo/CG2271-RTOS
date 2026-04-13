@@ -45,6 +45,8 @@
 #define BUZZER_PIN 9
 #define BUZZER_DURATION 50  // How long to buzz for in ms
 #define BUZZER_VOLUME 80   // Volume as percentage
+#define BUZZER_BASE_FREQUENCY 1000 // Base buzzer frequency
+#define BUZZER_DELTA 300 // Final freq = random * delta + base
 
 typedef struct {
   CommandType command;
@@ -122,7 +124,7 @@ static void setBuzzer(int volume) {
   if (volume < 0) volume = 0;
   if (volume > 100) volume = 100;
   int dutyCycle = (float)volume / 100 * 255;
-  int frequency = ((rand() % 3) * 300) + 1000;
+  int frequency = ((rand() % 3) * BUZZER_DELTA) + BUZZER_BASE_FREQUENCY;
   analogWrite(BUZZER_PIN, dutyCycle);
   analogWriteFrequency(BUZZER_PIN, frequency);
 }

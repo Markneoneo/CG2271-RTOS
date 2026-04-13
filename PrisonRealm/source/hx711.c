@@ -9,8 +9,8 @@
 
 #define HX711_DOUT_PIN  0 // PTB 0
 #define HX711_SCK_PIN   1 // PTB 1
-static const int32_t HX711_OFFSET = 576950;
-static const int32_t HX711_SCALE  = 398;
+static const int32_t HX711_OFFSET = 537100;
+static const int32_t HX711_SCALE  = 399;
 
 void initHX711() {
 	// DOUT is HIGH when data is not ready.
@@ -76,5 +76,5 @@ int32_t hx711ReadData(void) {
 		raw |= 0xFF000000;
 	}
 
-	return ((int32_t) raw - HX711_OFFSET) / HX711_SCALE;
+	return (HX711_OFFSET - (int32_t) raw) / HX711_SCALE;
 }

@@ -295,30 +295,20 @@ static void uartRecvTask(void *pv) {
         StaticJsonDocument<256> doc;
         DeserializationError err = deserializeJson(doc, line);
         if (!err) {
-          const char *type = doc["type"] | "unknown";
-
-          // Sensor
-          if (strcmp(type, "sensor") == 0) {
+          // MCU sends two message types:
+          //   {"type":"sensor", "sensor":N, "value":V}  — upload to Supabase
+          //   {"type":"state",  "door":N, "lock":N, "alarm":N} — ignore
+          const char* type = doc["type"] | "sensor"; // default for legacy messages without "type"
+          if (strcmp(type, "sensor") != 0) {
+            Serial.printf("[UART RX] Ignoring type='%s'\n", type);
+          } else {
             TSensorData entry;
             entry.sensor = (SensorType)doc["sensor"].as<int>();
-            entry.value = doc["value"].as<float>();
+            entry.value  = doc["value"].as<float>();
             Serial.printf("[UART RX] sensor=%d value=%.2f\n",
-                          (int)entry.sensor, entry.value);
+                (int)entry.sensor, entry.value);
             xQueueSend(uploadQueue, &entry, 0);
-
-          // State
-          } else if (strcmp(type, "state") == 0) {
-            SystemState state;
-            state.door = (DoorState)(doc["door"] | 0);
-            state.lock = (LockState)(doc["lock"] | 0);
-            state.alarm = (AlarmState)(doc["alarm"] | 0);
-            Serial.printf("[UART RX] state: door=%d lock=%d alarm=%d\n",
-                          state.door, state.lock, state.alarm);
-            xQueueSend(stateQueue, &state, 0);
-          } else {
-            Serial.printf("[UART RX] Unknown type: %s\n", type);
           }
-
         } else {
           Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
                         err.c_str(), line.c_str());

@@ -32,15 +32,18 @@
 
 #define DHT_PIN 7
 #define DHTTYPE DHT11
+#define TEMP_TASK_DELAY 10000  //10s
 
 #define UART1_RX_PIN 18
 #define UART1_TX_PIN 17
 #define UART1_BAUD 115200
 
 #define COMMAND_POLL_MS 2000
+#define CMD_LOCK_STR "lock"
+#define CMD_UNLOCK_STR "unlock"
 
 typedef struct {
-  char command[32];
+  CommandType command;
   int commandId;
 } TCommand;
 
@@ -48,6 +51,7 @@ Supabase db;
 DHT dht(DHT_PIN, DHTTYPE);
 QueueHandle_t uploadQueue;
 QueueHandle_t commandQueue;
+QueueHandle_t stateQueue;   // State data to upload to Supabase
 SemaphoreHandle_t dbMutex;  // Protects all Supabase calls
 
 // Keypad setup
@@ -55,16 +59,16 @@ const byte ROWS = 4;
 const byte COLS = 3;
 
 char keys[ROWS][COLS] = {
-  {'1','3','2'},
-  {'4','6','5'},
-  {'7','9','8'},
-  {'*','#','0'}
+  { '1', '3', '2' },
+  { '4', '6', '5' },
+  { '7', '9', '8' },
+  { '*', '#', '0' }
 };
 
-byte rowPins[ROWS] = {35, 36, 37, 38}; // R1-R4
-byte colPins[COLS] = {39, 40, 41};     // C1-C3
+byte rowPins[ROWS] = { 35, 36, 37, 38 };  // R1-R4
+byte colPins[COLS] = { 39, 40, 41 };      // C1-C3
 
-Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 void initGojo() {
   Serial.println("[Domain Expansion] Preparing Unlimited Void...");
@@ -109,7 +113,7 @@ void initWiFi() {
   Serial.println("[INIT] Supabase initialised.");
 }
 
-static void uploadToSupabase(SensorType sensor, float value) {
+static void uploadSensorToSupabase(TSensorData entry) {
   static const char *sensorNames[] = {
     "reed",         // SENSOR_REED  = 0
     "temperature",  // SENSOR_TEMP  = 1
@@ -120,12 +124,12 @@ static void uploadToSupabase(SensorType sensor, float value) {
   StaticJsonDocument<256> doc;
   String json;
 
-  doc["sensor_type"] = sensorNames[(int)sensor];
-  doc["value"] = value;
+  doc["sensor_type"] = sensorNames[(int)entry.sensor];
+  doc["value"] = entry.value;
   serializeJson(doc, json);
 
   Serial.printf("[UPLOAD] sensor=%s value=%.2f\n",
-                sensorNames[(int)sensor], value);
+                sensorNames[(int)entry.sensor], entry.value);
 
   if (xSemaphoreTake(dbMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
     int code = db.insert("sensor_logs", json, false);
@@ -134,6 +138,28 @@ static void uploadToSupabase(SensorType sensor, float value) {
     xSemaphoreGive(dbMutex);
   } else {
     Serial.println("[UPLOAD] Could not acquire db mutex - skipping.");
+  }
+}
+
+static void uploadStateToSupabase(SystemState state) {
+  StaticJsonDocument<256> doc;
+  String json;
+
+  doc["is_door_locked"] = (state.lock == LOCKED);
+  doc["is_door_open"]   = (state.door == OPEN);
+  doc["is_alarm_on"]    = (state.alarm == ALARM_ACTIVE);
+  serializeJson(doc, json);
+
+  Serial.printf("[UPLOAD] state: is_door_locked=%d is_door_open=%d is_alarm_on=%d\n",
+                state.lock == LOCKED, state.door == OPEN, state.alarm == ALARM_ACTIVE);
+
+  if (xSemaphoreTake(dbMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
+    int code = db.insert("state", json, false);  // table name is "state" not "system_state"
+    Serial.printf("[UPLOAD] State response: %d\n", code);
+    db.urlQuery_reset();
+    xSemaphoreGive(dbMutex);
+  } else {
+    Serial.println("[UPLOAD] Could not acquire db mutex - skipping state.");
   }
 }
 
@@ -160,16 +186,33 @@ static void markCommandExecuted(int commandId) {
 
 // Task: Upload Consumer
 static void uploadTask(void *pv) {
-  TSensorData entry;
   for (;;) {
-    if (xQueueReceive(uploadQueue, &entry, portMAX_DELAY) == pdTRUE) {
-      if (WiFi.status() == WL_CONNECTED) {
-        uploadToSupabase(entry.sensor, entry.value);
-      } else {
-        Serial.println("[UPLOAD] WiFi disconnected - dropping entry.");
-      }
+    TSensorData sensorEntry;
+    SystemState stateEntry;
+
+    if (xQueueReceive(uploadQueue, &sensorEntry, 0) == pdTRUE) {
+      if (WiFi.status() == WL_CONNECTED)
+        uploadSensorToSupabase(sensorEntry);
+      else
+        Serial.println("[UPLOAD] WiFi disconnected - dropping sensor entry.");
     }
+
+    if (xQueueReceive(stateQueue, &stateEntry, 0) == pdTRUE) {
+      if (WiFi.status() == WL_CONNECTED)
+        uploadStateToSupabase(stateEntry);
+      else
+        Serial.println("[UPLOAD] WiFi disconnected - dropping state entry.");
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
+}
+
+// Helper to map command strings to an integer
+static CommandType commandStrToInt(const char *cmd) {
+  if (strncmp(cmd, CMD_LOCK_STR, 4) == 0) return CMD_LOCK;
+  if (strncmp(cmd, CMD_UNLOCK_STR, 6) == 0) return CMD_UNLOCK;
+  return CMD_INVALID;  // unknown
 }
 
 // Task: Command Poll (Supabase -> MCXC444)
@@ -180,6 +223,7 @@ static void commandPollTask(void *pv) {
       String response = "";
 
       if (xSemaphoreTake(dbMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
+        // Take the latest value from commands table in DB
         response = db.from("commands")
                      .select("*")
                      .eq("executed", "false")
@@ -198,13 +242,19 @@ static void commandPollTask(void *pv) {
         if (!err && doc.is<JsonArray>() && doc.as<JsonArray>().size() > 0) {
           JsonObject row = doc[0];
           TCommand cmd;
-          strncpy(cmd.command, row["command"] | "unknown", sizeof(cmd.command));
+
+          // Extract command string and convert to integer
+          const char *cmdStr = row["command"] | "unknown";
+          cmd.command = commandStrToInt(cmdStr);
           cmd.commandId = row["id"] | 0;
 
-          Serial.printf("[CMD] New command: '%s' (id=%d)\n",
-                        cmd.command, cmd.commandId);
-
-          xQueueSend(commandQueue, &cmd, 0);
+          // If valid command, send it to queue
+          if (cmd.command == CMD_INVALID) {
+            Serial.printf("[CMD] Unknown command: '%s', skipping.\n", cmdStr);
+          } else {
+            Serial.printf("[CMD] New command: %d (id=%d)\n", cmd.command, cmd.commandId);
+            xQueueSend(commandQueue, &cmd, 0);
+          };
         }
       }
     }
@@ -238,6 +288,8 @@ static void uartRecvTask(void *pv) {
   for (;;) {
     if (Serial1.available()) {
       String line = Serial1.readStringUntil('\n');
+      Serial.print("[UART RX] Received: ");
+      Serial.println(line);
       line.trim();
       if (line.length() > 0) {
         StaticJsonDocument<256> doc;
@@ -259,7 +311,7 @@ static void uartRecvTask(void *pv) {
           }
         } else {
           Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
-              err.c_str(), line.c_str());
+                        err.c_str(), line.c_str());
         }
       }
     }
@@ -278,21 +330,21 @@ static void tempTask(void *pv) {
     } else {
       Serial.println("[TEMP] Read failed.");
     }
-    vTaskDelay(pdMS_TO_TICKS(10000));  // every 10 s
+    vTaskDelay(pdMS_TO_TICKS(TEMP_TASK_DELAY));
   }
 }
 
 // Task: Keypad -> Command Queue
 static void keypadTask(void *pv) {
   const char correctPassword[] = "2271";
-  char buffer[8];       // store entered digits
-  uint8_t index = 0;    // current buffer index
+  char buffer[8];     // store entered digits
+  uint8_t index = 0;  // current buffer index
   bool entering = false;
 
   for (;;) {
     char key = keypad.getKey();
     if (key) {
-      Serial.println("[KEYPAD] Pressed: %c\n", key);
+      Serial.printf("[KEYPAD] Pressed: %c\n", key);
 
       if (key == '#') {
         // Start entering password
@@ -300,17 +352,16 @@ static void keypadTask(void *pv) {
         index = 0;
         memset(buffer, 0, sizeof(buffer));
         Serial.println("[KEYPAD] Enter password...");
-      } 
-      else if (key == '*') {
+      } else if (key == '*') {
         // Immediate lock
         TCommand cmd;
         cmd.commandId = 0;
-        strncpy(cmd.command, "lock", sizeof(cmd.command));
+        cmd.command = CMD_LOCK;
+        //strncpy(cmd.command, "lock", sizeof(cmd.command));
         xQueueSend(commandQueue, &cmd, 0);
         Serial.println("[KEYPAD] Lock command sent.");
-        entering = false; // reset any partial password
-      } 
-      else if (entering && index < sizeof(buffer)-1) {
+        entering = false;  // reset any partial password
+      } else if (entering && index < sizeof(buffer) - 1) {
         // Append digit to buffer
         buffer[index++] = key;
 
@@ -319,7 +370,8 @@ static void keypadTask(void *pv) {
           if (strncmp(buffer, correctPassword, strlen(correctPassword)) == 0) {
             TCommand cmd;
             cmd.commandId = 0;
-            strncpy(cmd.command, "unlock", sizeof(cmd.command));
+            cmd.command = CMD_UNLOCK;
+            //strncpy(cmd.command, "unlock", sizeof(cmd.command));
             xQueueSend(commandQueue, &cmd, 0);
             Serial.println("[KEYPAD] Password correct. Unlock sent.");
           } else {
@@ -340,7 +392,8 @@ static void keypadTask(void *pv) {
 void setup() {
   Serial.begin(115200);
   unsigned long start = millis();
-  while (millis() - start < 3000));
+  while ((millis() - start) < 3000)
+    ;
 
   Serial.println("\n--- PrisonRealm ESP32 Starting ---");
 
@@ -351,13 +404,16 @@ void setup() {
 
   uploadQueue = xQueueCreate(20, sizeof(TSensorData));
   commandQueue = xQueueCreate(10, sizeof(TCommand));
+  stateQueue = xQueueCreate(10, sizeof(SystemState));
   dbMutex = xSemaphoreCreateMutex();
 
   xTaskCreate(uploadTask, "Upload", 12288, NULL, 1, NULL);
   xTaskCreate(uartRecvTask, "UART_Rx", 8192, NULL, 2, NULL);
   xTaskCreate(uartSendTask, "UART_Tx", 8192, NULL, 2, NULL);
+
   xTaskCreate(tempTask, "Temp", 8192, NULL, 2, NULL);
   xTaskCreate(keypadTask, "Keypad", 8192, NULL, 2, NULL);
+
   xTaskCreate(commandPollTask, "CmdPoll", 12288, NULL, 1, NULL);
 
   Serial.println("[INIT] All tasks started.\n");

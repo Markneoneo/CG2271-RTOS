@@ -24,6 +24,12 @@ typedef struct {
 } TSensorData;
 
 typedef enum {
+	CMD_LOCK,
+	CMD_UNLOCK,
+	CMD_INVALID
+} CommandType;
+
+typedef enum {
     LOCKED = 0,
     UNLOCKED
 } LockState;

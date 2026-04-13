@@ -43,6 +43,8 @@
 #define CMD_UNLOCK_STR "unlock"
 
 #define BUZZER_PIN 9
+#define BUZZER_DURATION 50  // How long to buzz for in ms
+#define BUZZER_VOLUME 80   // Volume as percentage
 
 typedef struct {
   CommandType command;
@@ -55,6 +57,7 @@ QueueHandle_t uploadQueue;
 QueueHandle_t commandQueue;
 QueueHandle_t stateQueue;   // State data to upload to Supabase
 SemaphoreHandle_t dbMutex;  // Protects all Supabase calls
+TimerHandle_t buzzerTimer;
 
 // Keypad setup
 const byte ROWS = 4;
@@ -115,6 +118,28 @@ void initWiFi() {
   Serial.println("[INIT] Supabase initialised.");
 }
 
+static void setBuzzer(int volume) {
+  if (volume < 0) volume = 0;
+  if (volume > 100) volume = 100;
+  int dutyCycle = (float)volume / 100 * 255;
+  int frequency = ((rand() % 3) * 300) + 1000;
+  analogWrite(BUZZER_PIN, dutyCycle);
+  analogWriteFrequency(BUZZER_PIN, frequency);
+}
+
+static void clearBuzzer() {
+  analogWrite(BUZZER_PIN, 0);
+}
+
+void buzzerTimerCallback(TimerHandle_t xTimer) {
+  clearBuzzer();
+}
+
+void initBuzzer() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  buzzerTimer = xTimerCreate("Buzzer Timer", pdMS_TO_TICKS(BUZZER_DURATION), pdFALSE, (void *)0, buzzerTimerCallback);
+}
+
 static void uploadSensorToSupabase(TSensorData entry) {
   static const char *sensorNames[] = {
     "reed",         // SENSOR_REED  = 0
@@ -148,8 +173,8 @@ static void uploadStateToSupabase(SystemState state) {
   String json;
 
   doc["is_door_locked"] = (state.lock == LOCKED);
-  doc["is_door_open"]   = (state.door == OPEN);
-  doc["is_alarm_on"]    = (state.alarm == ALARM_ACTIVE);
+  doc["is_door_open"] = (state.door == OPEN);
+  doc["is_alarm_on"] = (state.alarm == ALARM_ACTIVE);
   serializeJson(doc, json);
 
   Serial.printf("[UPLOAD] state: is_door_locked=%d is_door_open=%d is_alarm_on=%d\n",
@@ -300,15 +325,15 @@ static void uartRecvTask(void *pv) {
           // MCU sends two message types:
           //   {"type":"sensor", "sensor":N, "value":V}  — upload to Supabase
           //   {"type":"state",  "door":N, "lock":N, "alarm":N} — ignore
-          const char* type = doc["type"] | "sensor"; // default for legacy messages without "type"
+          const char *type = doc["type"] | "sensor";  // default for legacy messages without "type"
           if (strcmp(type, "sensor") != 0) {
             Serial.printf("[UART RX] Ignoring type='%s'\n", type);
           } else {
             TSensorData entry;
             entry.sensor = (SensorType)doc["sensor"].as<int>();
-            entry.value  = doc["value"].as<float>();
+            entry.value = doc["value"].as<float>();
             Serial.printf("[UART RX] sensor=%d value=%.2f\n",
-                (int)entry.sensor, entry.value);
+                          (int)entry.sensor, entry.value);
             xQueueSend(uploadQueue, &entry, 0);
           }
         } else {
@@ -336,6 +361,8 @@ static void tempTask(void *pv) {
   }
 }
 
+
+
 // Task: Keypad -> Command Queue
 static void keypadTask(void *pv) {
   const char correctPassword[] = "2271";
@@ -345,8 +372,13 @@ static void keypadTask(void *pv) {
 
   for (;;) {
     char key = keypad.getKey();
+
     if (key) {
       Serial.printf("[KEYPAD] Pressed: %c\n", key);
+
+      // Buzz, set timer to clear buzzer
+      setBuzzer(BUZZER_VOLUME);
+      xTimerStart(buzzerTimer, 0);
 
       if (key == '#') {
         // Start entering password
@@ -402,6 +434,7 @@ void setup() {
   initGojo();
   initUART1();
   initDHT();
+  initBuzzer();
   initWiFi();
 
   uploadQueue = xQueueCreate(20, sizeof(TSensorData));

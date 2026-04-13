@@ -42,6 +42,8 @@
 #define CMD_LOCK_STR "lock"
 #define CMD_UNLOCK_STR "unlock"
 
+#define BUZZER_PIN 9
+
 typedef struct {
   CommandType command;
   int commandId;
@@ -59,10 +61,10 @@ const byte ROWS = 4;
 const byte COLS = 3;
 
 char keys[ROWS][COLS] = {
-  { '1', '3', '2' },
-  { '4', '6', '5' },
-  { '7', '9', '8' },
-  { '*', '#', '0' }
+  { '1', '2', '3' },
+  { '4', '6', '6' },
+  { '7', '8', '9' },
+  { '*', '0', '#' }
 };
 
 byte rowPins[ROWS] = { 35, 36, 37, 38 };  // R1-R4

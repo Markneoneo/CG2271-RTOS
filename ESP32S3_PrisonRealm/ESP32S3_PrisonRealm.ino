@@ -42,6 +42,12 @@
 #define CMD_LOCK_STR "lock"
 #define CMD_UNLOCK_STR "unlock"
 
+#define BUZZER_PIN 9
+#define BUZZER_DURATION 50  // How long to buzz for in ms
+#define BUZZER_VOLUME 80   // Volume as percentage
+#define BUZZER_BASE_FREQUENCY 1000 // Base buzzer frequency
+#define BUZZER_DELTA 300 // Final freq = random * delta + base
+
 typedef struct {
   CommandType command;
   int commandId;
@@ -53,16 +59,17 @@ QueueHandle_t uploadQueue;
 QueueHandle_t commandQueue;
 QueueHandle_t stateQueue;   // State data to upload to Supabase
 SemaphoreHandle_t dbMutex;  // Protects all Supabase calls
+TimerHandle_t buzzerTimer;
 
 // Keypad setup
 const byte ROWS = 4;
 const byte COLS = 3;
 
 char keys[ROWS][COLS] = {
-  { '1', '3', '2' },
-  { '4', '6', '5' },
-  { '7', '9', '8' },
-  { '*', '#', '0' }
+  { '1', '2', '3' },
+  { '4', '6', '6' },
+  { '7', '8', '9' },
+  { '*', '0', '#' }
 };
 
 byte rowPins[ROWS] = { 35, 36, 37, 38 };  // R1-R4
@@ -113,6 +120,28 @@ void initWiFi() {
   Serial.println("[INIT] Supabase initialised.");
 }
 
+static void setBuzzer(int volume) {
+  if (volume < 0) volume = 0;
+  if (volume > 100) volume = 100;
+  int dutyCycle = (float)volume / 100 * 255;
+  int frequency = ((rand() % 3) * BUZZER_DELTA) + BUZZER_BASE_FREQUENCY;
+  analogWrite(BUZZER_PIN, dutyCycle);
+  analogWriteFrequency(BUZZER_PIN, frequency);
+}
+
+static void clearBuzzer() {
+  analogWrite(BUZZER_PIN, 0);
+}
+
+void buzzerTimerCallback(TimerHandle_t xTimer) {
+  clearBuzzer();
+}
+
+void initBuzzer() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  buzzerTimer = xTimerCreate("Buzzer Timer", pdMS_TO_TICKS(BUZZER_DURATION), pdFALSE, (void *)0, buzzerTimerCallback);
+}
+
 static void uploadSensorToSupabase(TSensorData entry) {
   static const char *sensorNames[] = {
     "reed",         // SENSOR_REED  = 0
@@ -146,8 +175,8 @@ static void uploadStateToSupabase(SystemState state) {
   String json;
 
   doc["is_door_locked"] = (state.lock == LOCKED);
-  doc["is_door_open"]   = (state.door == OPEN);
-  doc["is_alarm_on"]    = (state.alarm == ALARM_ACTIVE);
+  doc["is_door_open"] = (state.door == OPEN);
+  doc["is_alarm_on"] = (state.alarm == ALARM_ACTIVE);
   serializeJson(doc, json);
 
   Serial.printf("[UPLOAD] state: is_door_locked=%d is_door_open=%d is_alarm_on=%d\n",
@@ -262,9 +291,6 @@ static void commandPollTask(void *pv) {
   }
 }
 
-// Tracks the current lock state so state uploads reflect it correctly.
-static volatile LockState currentLock = LOCKED;
-
 // Task: UART Send (ESP32 -> MCXC444)
 static void uartSendTask(void *pv) {
   TCommand cmd;
@@ -278,18 +304,6 @@ static void uartSendTask(void *pv) {
 
       Serial1.print(json);
       Serial.printf("[UART TX] Sent: %s", json.c_str());
-
-      // FIX: Update lock state and push to Supabase state table immediately.
-      // Previously nothing ever wrote to stateQueue, so is_door_locked
-      // never updated in Supabase.
-      currentLock = (cmd.command == CMD_LOCK) ? LOCKED : UNLOCKED;
-      SystemState newState;
-      newState.lock  = currentLock;
-      newState.door  = CLOSED;         // door position comes from reed sensor
-      newState.alarm = ALARM_INACTIVE;
-      xQueueSend(stateQueue, &newState, 0);
-      Serial.printf("[UART TX] State upload queued: lock=%s\n",
-                    currentLock == LOCKED ? "LOCKED" : "UNLOCKED");
 
       if (WiFi.status() == WL_CONNECTED) {
         markCommandExecuted(cmd.commandId);
@@ -313,28 +327,16 @@ static void uartRecvTask(void *pv) {
           // MCU sends two message types:
           //   {"type":"sensor", "sensor":N, "value":V}  — upload to Supabase
           //   {"type":"state",  "door":N, "lock":N, "alarm":N} — ignore
-          const char* type = doc["type"] | "sensor"; // default for legacy messages without "type"
-          if (strcmp(type, "state") == 0) {
-            // FIX: Previously these were silently ignored. Now we push
-            // the door/lock/alarm state from the MCXC444 to Supabase.
-            SystemState st;
-            st.door  = doc["door"].as<int>()  ? OPEN   : CLOSED;
-            st.lock  = doc["lock"].as<int>()  ? UNLOCKED : LOCKED;
-            st.alarm = doc["alarm"].as<int>() ? ALARM_ACTIVE : ALARM_INACTIVE;
-            // Keep currentLock in sync so uartSendTask state is consistent
-            currentLock = st.lock;
-            xQueueSend(stateQueue, &st, 0);
-            Serial.printf("[UART RX] State update: door=%d lock=%d alarm=%d\n",
-                          st.door, st.lock, st.alarm);
-          } else if (strcmp(type, "sensor") == 0) {
+          const char *type = doc["type"] | "sensor";  // default for legacy messages without "type"
+          if (strcmp(type, "sensor") != 0) {
+            Serial.printf("[UART RX] Ignoring type='%s'\n", type);
+          } else {
             TSensorData entry;
             entry.sensor = (SensorType)doc["sensor"].as<int>();
-            entry.value  = doc["value"].as<float>();
+            entry.value = doc["value"].as<float>();
             Serial.printf("[UART RX] sensor=%d value=%.2f\n",
-                (int)entry.sensor, entry.value);
+                          (int)entry.sensor, entry.value);
             xQueueSend(uploadQueue, &entry, 0);
-          } else {
-            Serial.printf("[UART RX] Unknown type='%s', skipping.\n", type);
           }
         } else {
           Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
@@ -361,6 +363,8 @@ static void tempTask(void *pv) {
   }
 }
 
+
+
 // Task: Keypad -> Command Queue
 static void keypadTask(void *pv) {
   const char correctPassword[] = "2271";
@@ -370,8 +374,13 @@ static void keypadTask(void *pv) {
 
   for (;;) {
     char key = keypad.getKey();
+
     if (key) {
       Serial.printf("[KEYPAD] Pressed: %c\n", key);
+
+      // Buzz, set timer to clear buzzer
+      setBuzzer(BUZZER_VOLUME);
+      xTimerStart(buzzerTimer, 0);
 
       if (key == '#') {
         // Start entering password
@@ -427,6 +436,7 @@ void setup() {
   initGojo();
   initUART1();
   initDHT();
+  initBuzzer();
   initWiFi();
 
   uploadQueue = xQueueCreate(20, sizeof(TSensorData));

@@ -12,7 +12,7 @@
 #define SERVO_MIN_US     100
 #define SERVO_MAX_US     3500
 
-#define UNLOCK_POSITION  500
+#define UNLOCK_POSITION  1500
 #define LOCK_POSITION    2500
 
 void initServo(void) {

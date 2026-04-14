@@ -51,7 +51,7 @@ char send_buffer[MAX_MSG_LEN];
 // Reed Sensor and Buzzer
 #define REED_PIN        12 // PTA12
 #define BUZZER_PIN      13 // PTA13
-#define TIMER_DELAY     2000 // 2s or 2000 ms
+#define TIMER_DELAY     8000 // 2s or 2000 ms
 
 // Shock Sensor
 #define SHOCK_PIN       2 // PTD 2
@@ -549,17 +549,6 @@ static void initSystemState() {
 	systemStateMutex = xSemaphoreCreateMutex();
 }
 
-static void servoTestTask(void *p) {
-
-	static bool servoTestLockState = false; // local toggle state
-	while (1) {
-		servoTestLockState = !servoTestLockState;
-		PRINTF("Toggling servo lock state.\r\n");
-		setLockState(servoTestLockState ? LOCKED : UNLOCKED);
-
-		vTaskDelay(pdMS_TO_TICKS(1000));
-	}
-}
 
 void initSW2(void) {
 	NVIC_DisableIRQ(PORTC_PORTD_IRQn);
@@ -582,47 +571,6 @@ void initSW2(void) {
 	NVIC_EnableIRQ(PORTC_PORTD_IRQn);
 }
 
-static void rgbTestTask(void *p) {
-	SystemState testState;
-	uint8_t step = 0;
-
-	while (1) {
-		switch (step % 4) {
-		case 0: // Door CLOSED, Lock LOCKED, Alarm inactive
-			testState.door = CLOSED;
-			testState.lock = LOCKED;
-			testState.alarm = ALARM_INACTIVE;
-			PRINTF("Should see GREEN\r\n");
-			break;
-		case 1: // Door CLOSED, Lock UNLOCKED, Alarm inactive
-			testState.door = CLOSED;
-			testState.lock = UNLOCKED;
-			testState.alarm = ALARM_INACTIVE;
-			PRINTF("Should see YELLOW\r\n");
-			break;
-		case 2: // Door OPEN, Lock LOCKED, Alarm active (blinking)
-			testState.door = OPEN;
-			testState.lock = LOCKED;
-			testState.alarm = ALARM_ACTIVE;
-			PRINTF("Should see BLINKING ORANGE\r\n");
-			break;
-		case 3: // Door OPEN, Lock UNLOCKED, Alarm active (blinking)
-			testState.door = OPEN;
-			testState.lock = UNLOCKED;
-			testState.alarm = ALARM_ACTIVE;
-			PRINTF("Should see BLINKING RED\r\n");
-			break;
-		}
-
-		// Update the global systemState with mutex protection
-		xSemaphoreTake(systemStateMutex, portMAX_DELAY);
-		systemState = testState;
-		xSemaphoreGive(systemStateMutex);
-
-		step++;
-		vTaskDelay(pdMS_TO_TICKS(2000)); // 5s per state
-	}
-}
 
 /*
  * @brief   Application entry point.
@@ -675,7 +623,6 @@ int main(void) {
 	NULL);
 	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 4,
 			&servoTaskHandle);
-
 	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 			&shockTaskHandle);
 	xTaskCreate(sendStateTask, "sendStateTask", configMINIMAL_STACK_SIZE + 100,

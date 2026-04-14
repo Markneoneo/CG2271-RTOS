@@ -287,15 +287,15 @@
         </div>
       </div>
       <div class="cfg-sec">
-        <div class="cfg-sec-title">Google Gemini AI (optional, free)</div>
+        <div class="cfg-sec-title">OpenAI GPT-4o-mini</div>
         <div class="cfg-row">
-          <input id="cfg-gemini" type="password" class="wide" placeholder="Gemini API Key — AIza… (optional)" />
+          <input id="cfg-gemini" type="password" class="wide" placeholder="OpenAI Key — sk-proj-… (optional)" />
           <button class="btn-connect" onclick="manualConnect()">Reconnect</button>
           <button id="demo-btn" onclick="startDemoMode()">Demo Mode</button>
         </div>
         <div class="cfg-note">
-          Free key: <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a>
-          · Model: <strong>gemini-2.0-flash</strong> · 15 req/min — no credit card needed.
+          Get a key at <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>
+          · Model: <strong>gpt-4o-mini</strong> · Very low cost per request.
         </div>
       </div>
     </div>
@@ -383,7 +383,7 @@
         AI Threat Assessment
       </div>
       <div class="aipanel" id="aipanel">
-        <div class="ailabel">Gemini 2.0 Flash</div><br/>
+        <div class="ailabel">GPT-4o-mini</div><br/>
         <span class="aiempty">No shock events. AI assessment activates automatically when the shock sensor fires.</span>
       </div>
       <div class="risk-wrap">
@@ -397,10 +397,10 @@
         <div class="risk-level" id="risk-level" style="color:var(--text-muted)">Awaiting analysis…</div>
       </div>
       <div class="aikey">
-        <span class="aikey-lbl">GEMINI KEY</span>
-        <input id="gemini-inline" type="password" placeholder="AIza…" />
+        <span class="aikey-lbl">OPENAI KEY</span>
+        <input id="gemini-inline" type="password" placeholder="sk-proj-…" />
         <span id="ai-key-status" class="ai-key-chk">—</span>
-        <button onclick="verifyGeminiKey()" style="background:transparent;border:1px solid var(--border2);border-radius:var(--r);padding:6px 12px;font-family:var(--mono);font-size:10px;color:var(--text-dim);cursor:pointer;white-space:nowrap;" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--border2)'">TEST KEY</button>
+        <button onclick="verifyOpenAIKey()" style="background:transparent;border:1px solid var(--border2);border-radius:var(--r);padding:6px 12px;font-family:var(--mono);font-size:10px;color:var(--text-dim);cursor:pointer;white-space:nowrap;" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--border2)'">TEST KEY</button>
       </div>
     </div>
 
@@ -420,7 +420,7 @@
   <footer class="footer">
     <span>PrisonRealm · CG2271 RTOS · AY2025/26 S2</span>
     <span id="lupdate">Last update: —</span>
-    <span>Supabase Realtime · Google Gemini 2.0 Flash</span>
+    <span>Supabase Realtime · OpenAI GPT-4o-mini</span>
   </footer>
 
 </div>
@@ -433,9 +433,9 @@
 // config.js is missing or fails to define these variables.
 if (typeof SUPA_URL    === 'undefined') window.SUPA_URL    = '';
 if (typeof SUPA_ANON   === 'undefined') window.SUPA_ANON   = '';
-if (typeof GEMINI_KEY  === 'undefined') window.GEMINI_KEY  = '';
+if (typeof OPENAI_KEY  === 'undefined') window.OPENAI_KEY  = '';
 
-const GEMINI_URL      = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const OPENAI_URL      = 'https://api.openai.com/v1/chat/completions';
 const SHOCK_RECENT_MS = 60_000;
 const SHOCK_ALARM_MS  = 30_000;
 
@@ -622,7 +622,7 @@ function applySensorReading(sensor_type, value, created_at) {
         setTimeout(() => siShock.classList.remove('shock-triggered'), 400);
         document.getElementById('s-shock-time').textContent =
           ts.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        callGemini();
+        callOpenAI();
       }
       break;
     }
@@ -768,28 +768,29 @@ async function sendCommand(cmd) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-//  GEMINI AI
+//  OPENAI GPT-4o-mini
 // ──────────────────────────────────────────────────────────────────
-function geminiKey() {
+function openaiKey() {
   return (document.getElementById('gemini-inline')?.value || '').trim()
       || (document.getElementById('cfg-gemini')?.value    || '').trim()
-      || GEMINI_KEY;
+      || OPENAI_KEY;
 }
 
-async function verifyGeminiKey() {
-  const key    = geminiKey();
+async function verifyOpenAIKey() {
+  const key    = openaiKey();
   const status = document.getElementById('ai-key-status');
   if (!key) { status.textContent = 'NO KEY'; status.className = 'ai-key-err'; return; }
 
   status.textContent = 'CHECKING…';
   status.className   = 'ai-key-chk';
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${key}`, {
+    const res = await fetch(OPENAI_URL, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: 'Reply with just the word: OK' }] }],
-        generationConfig: { maxOutputTokens: 5 }
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: 'Reply with just the word: OK' }],
+        max_tokens: 5
       })
     });
     if (res.ok) {
@@ -797,7 +798,7 @@ async function verifyGeminiKey() {
       status.className   = 'ai-key-ok';
     } else {
       const e = await res.json();
-      status.textContent = `✗ ${e?.error?.status || 'INVALID'}`;
+      status.textContent = `✗ ${e?.error?.code || 'INVALID'}`;
       status.className   = 'ai-key-err';
     }
   } catch (e) {
@@ -808,78 +809,118 @@ async function verifyGeminiKey() {
 
 function setAIThinking() {
   document.getElementById('aipanel').innerHTML =
-    `<div class="ailabel">Gemini 2.0 Flash</div><br/>
+    `<div class="ailabel">GPT-4o-mini</div><br/>
      <div class="aithink"><span></span><span></span><span></span> Analysing shock event…</div>`;
   updateRiskScore(40, 'ANALYSING…');
 }
 
 function setAI(html) {
   document.getElementById('aipanel').innerHTML =
-    `<div class="ailabel">Gemini 2.0 Flash</div><br/>${html}`;
+    `<div class="ailabel">GPT-4o-mini</div><br/>${html}`;
 }
 
-async function callGemini() {
-  const key = geminiKey();
+// Handle for AI panel 30-second auto-clear
+let aiClearTimer = null;
+
+function clearAIPanel() {
+  document.getElementById('aipanel').innerHTML =
+    `<div class="ailabel">GPT-4o-mini</div><br/>
+     <span class="aiempty">Threat cleared — no shock events in the last 30 seconds.</span>`;
+  animateRiskTo(0);
+}
+
+function scheduleAIClear() {
+  if (aiClearTimer) clearTimeout(aiClearTimer);
+  aiClearTimer = setTimeout(clearAIPanel, 30_000);
+}
+
+async function callOpenAI() {
+  const key = openaiKey();
   if (!key) {
-    setAI(`<span class="aiempty">⚠ Shock detected — paste a Gemini API key below to enable AI threat assessment.</span>`);
+    setAI(`<span class="aiempty">⚠ Shock detected — paste an OpenAI API key below to enable AI threat assessment.</span>`);
     updateRiskScore(60, 'KEY REQUIRED — estimated MEDIUM risk');
+    scheduleAIClear();
     return;
   }
+  // Authorised access: door open + unlocked = password entry, clear threat immediately
+  if (state.door === 1 && state.lock === 1) {
+    setAI(`<span style="color:var(--green)">✓ Authorised access — door opened with unlock command. No threat detected.</span>`);
+    animateRiskTo(0);
+    if (aiClearTimer) clearTimeout(aiClearTimer);
+    return;
+  }
+
   setAIThinking();
+  scheduleAIClear(); // auto-clear panel 30s after last shock
 
-  const ctx = {
-    door:     state.door  ? 'OPEN'     : 'CLOSED',
-    lock:     state.lock  ? 'UNLOCKED' : 'LOCKED',
-    alarm:    state.alarm ? 'ACTIVE'   : 'INACTIVE',
-    weight_g: state.weight ?? '(unknown)',
-    temp_c:   state.temp   ?? '(unknown)',
-  };
+  const doorStr = state.door ? 'OPEN' : 'CLOSED';
+  const lockStr = state.lock ? 'UNLOCKED' : 'LOCKED';
 
-  const prompt = `You are a security analyst monitoring a smart door lock (Prison Realm IoT system).
+  // Explain the access context to GPT so it reasons correctly
+  let accessNote;
+  if      (state.door === 0 && state.lock === 0)
+    accessNote = 'Door is CLOSED and LOCKED. Shock while fully secured is suspicious.';
+  else if (state.door === 1 && state.lock === 0)
+    accessNote = 'Door is OPEN but lock is still LOCKED. This is the most suspicious combination.';
+  else
+    accessNote = 'Door is CLOSED but lock is UNLOCKED. System may be transitioning.';
 
-Current sensor state:
-- Door:        ${ctx.door}
-- Lock:        ${ctx.lock}
-- Alarm:       ${ctx.alarm}
-- Weight:      ${ctx.weight_g} g inside
-- Temperature: ${ctx.temp_c} °C
+  const prompt = `You are a security analyst monitoring a smart door lock.
 
-A shock sensor just fired. The door is currently ${ctx.door} and the lock is ${ctx.lock}.
+Sensor state when shock fired:
+- Door: ${doorStr}
+- Lock: ${lockStr}
+- Weight inside: ${state.weight ?? '(unknown)'} g
+- Temperature: ${state.temp ?? '(unknown)'} °C
+- Context: ${accessNote}
+
+Rules for your assessment:
+- Door CLOSED + LOCKED with shock: HIGH suspicion of intrusion attempt.
+- Door OPEN + LOCKED (forced open): VERY HIGH suspicion, likely forced entry.
+- Door CLOSED + UNLOCKED: LOW-MEDIUM suspicion, system in transition.
+- If door is OPEN and UNLOCKED, this function would not have been called (authorised access).
 
 Respond in exactly 2 sentences:
-1. Whether this is a genuine intrusion attempt or likely accidental vibration, and why.
-2. The single most important immediate action for the owner to take.
+1. Likelihood of intrusion vs accidental vibration based on the sensor context, and why.
+2. The single most important immediate action for the owner.
 Plain text only — no markdown, no bullet points.`;
 
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${key}`, {
+    const res = await fetch(OPENAI_URL, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 180, temperature: 0.35 }
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 180,
+        temperature: 0.35
       })
     });
     if (!res.ok) {
       const e = await res.json();
-      setAI(`<span style="color:var(--red)">⚠ Gemini error: ${e?.error?.message || 'HTTP ' + res.status}</span>`);
+      setAI(`<span style="color:var(--red)">⚠ OpenAI error: ${e?.error?.message || 'HTTP ' + res.status}</span>`);
       updateRiskScore(50, 'ERROR — score unavailable');
       return;
     }
     const j   = await res.json();
-    const txt = j?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response.';
+    const txt = j?.choices?.[0]?.message?.content || 'No response.';
 
-    let risk = 50;
-    if (/intrusion|forced|break.?in|genuine|serious|criminal|breach|tamper/i.test(txt)) risk = 85;
-    else if (/unlikely|false.?alarm|accidental|vibration|no immediate/i.test(txt))      risk = 15;
-    if (ctx.door === 'OPEN' && ctx.lock === 'LOCKED')   risk = Math.min(100, risk + 15);
-    if (ctx.door === 'OPEN' && ctx.lock === 'UNLOCKED') risk = Math.min(100, risk + 10);
+    // Base risk from physical state (most reliable signal)
+    let risk;
+    if      (state.door === 1 && state.lock === 0) risk = 90; // OPEN + LOCKED = forced
+    else if (state.door === 0 && state.lock === 0) risk = 65; // CLOSED + LOCKED = suspicious
+    else                                           risk = 25; // transition state
+    // Keyword fine-tune from GPT response
+    if (/intrusion|forced|break.?in|genuine|serious|criminal|breach/i.test(txt))
+      risk = Math.min(100, risk + 10);
+    else if (/unlikely|false.?alarm|accidental|vibration|no immediate/i.test(txt))
+      risk = Math.max(0, risk - 20);
     updateRiskScore(risk);
 
     const html = txt
-      .replace(/(intrusion|forced|break-in|genuine|immediate|serious|inspect|criminal|breach|tamper)/gi,
+      .replace(/(intrusion|forced|break-in|genuine|serious|criminal|breach)/gi,
                '<strong style="color:var(--red)">$1</strong>')
-      .replace(/(false alarm|vibration|accidental|unlikely|no immediate)/gi,
+      .replace(/(unlikely|false.alarm|accidental|vibration|no immediate)/gi,
                '<strong style="color:var(--amber)">$1</strong>');
     setAI(html);
   } catch (e) {
@@ -1092,7 +1133,7 @@ function startDemoMode() {
   renderHero();
 
   document.getElementById('aipanel').innerHTML =
-    `<div class="ailabel">Gemini 2.0 Flash</div><br/>
+    `<div class="ailabel">GPT-4o-mini</div><br/>
      <span class="aiempty">AI key loaded. Shock event fires at ~22s into demo — AI analysis will trigger automatically.</span>`;
   document.getElementById('cmdst').textContent = 'Demo mode — commands simulated locally.';
 
@@ -1134,10 +1175,10 @@ window.addEventListener('load', () => {
   initChart();
   renderHero();
 
-  if (GEMINI_KEY) {
-    document.getElementById('gemini-inline').value = GEMINI_KEY;
-    document.getElementById('cfg-gemini').value    = GEMINI_KEY;
-    verifyGeminiKey();
+  if (OPENAI_KEY) {
+    document.getElementById('gemini-inline').value = OPENAI_KEY;
+    document.getElementById('cfg-gemini').value    = OPENAI_KEY;
+    verifyOpenAIKey();
   }
 
   setTimeout(() => {

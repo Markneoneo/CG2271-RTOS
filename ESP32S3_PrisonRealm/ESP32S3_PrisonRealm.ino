@@ -262,6 +262,9 @@ static void commandPollTask(void *pv) {
   }
 }
 
+// Tracks the current lock state so state uploads reflect it correctly.
+static volatile LockState currentLock = LOCKED;
+
 // Task: UART Send (ESP32 -> MCXC444)
 static void uartSendTask(void *pv) {
   TCommand cmd;
@@ -275,6 +278,18 @@ static void uartSendTask(void *pv) {
 
       Serial1.print(json);
       Serial.printf("[UART TX] Sent: %s", json.c_str());
+
+      // FIX: Update lock state and push to Supabase state table immediately.
+      // Previously nothing ever wrote to stateQueue, so is_door_locked
+      // never updated in Supabase.
+      currentLock = (cmd.command == CMD_LOCK) ? LOCKED : UNLOCKED;
+      SystemState newState;
+      newState.lock  = currentLock;
+      newState.door  = CLOSED;         // door position comes from reed sensor
+      newState.alarm = ALARM_INACTIVE;
+      xQueueSend(stateQueue, &newState, 0);
+      Serial.printf("[UART TX] State upload queued: lock=%s\n",
+                    currentLock == LOCKED ? "LOCKED" : "UNLOCKED");
 
       if (WiFi.status() == WL_CONNECTED) {
         markCommandExecuted(cmd.commandId);
@@ -299,15 +314,27 @@ static void uartRecvTask(void *pv) {
           //   {"type":"sensor", "sensor":N, "value":V}  — upload to Supabase
           //   {"type":"state",  "door":N, "lock":N, "alarm":N} — ignore
           const char* type = doc["type"] | "sensor"; // default for legacy messages without "type"
-          if (strcmp(type, "sensor") != 0) {
-            Serial.printf("[UART RX] Ignoring type='%s'\n", type);
-          } else {
+          if (strcmp(type, "state") == 0) {
+            // FIX: Previously these were silently ignored. Now we push
+            // the door/lock/alarm state from the MCXC444 to Supabase.
+            SystemState st;
+            st.door  = doc["door"].as<int>()  ? OPEN   : CLOSED;
+            st.lock  = doc["lock"].as<int>()  ? UNLOCKED : LOCKED;
+            st.alarm = doc["alarm"].as<int>() ? ALARM_ACTIVE : ALARM_INACTIVE;
+            // Keep currentLock in sync so uartSendTask state is consistent
+            currentLock = st.lock;
+            xQueueSend(stateQueue, &st, 0);
+            Serial.printf("[UART RX] State update: door=%d lock=%d alarm=%d\n",
+                          st.door, st.lock, st.alarm);
+          } else if (strcmp(type, "sensor") == 0) {
             TSensorData entry;
             entry.sensor = (SensorType)doc["sensor"].as<int>();
             entry.value  = doc["value"].as<float>();
             Serial.printf("[UART RX] sensor=%d value=%.2f\n",
                 (int)entry.sensor, entry.value);
             xQueueSend(uploadQueue, &entry, 0);
+          } else {
+            Serial.printf("[UART RX] Unknown type='%s', skipping.\n", type);
           }
         } else {
           Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",

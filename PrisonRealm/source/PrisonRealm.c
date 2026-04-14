@@ -32,6 +32,11 @@
 
 static SystemState systemState;
 SemaphoreHandle_t systemStateMutex;
+// reedTask writes
+// servoTask reads
+// ledTask reads
+// UART task reads
+
 SemaphoreHandle_t txDoneSem;
 
 // systemState contains lockState and doorState.

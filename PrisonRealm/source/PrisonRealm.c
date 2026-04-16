@@ -56,7 +56,9 @@ char send_buffer[MAX_MSG_LEN];
 // Shock Sensor
 #define SHOCK_PIN       2 // PTD 2
 
+// HX711
 #define HX711_TASK_DELAY 5000 // 5s
+
 #define SWITCH_PIN 3 // SW2, PTC3
 #define QLEN	5
 
@@ -64,20 +66,23 @@ typedef struct tm {
 	char message[MAX_MSG_LEN];
 } TMessage;
 
+// Queue Handles
 QueueHandle_t queue;
 QueueHandle_t sensorDataQueue;
 QueueHandle_t msgQueue; // UART Out
 
+// Task Handles
 TaskHandle_t reedTaskHandle = NULL;
 TaskHandle_t servoTaskHandle = NULL;
 TaskHandle_t sendStateTaskHandle = NULL;
 TaskHandle_t shockTaskHandle = NULL;
 
+// Timer Handles
 TimerHandle_t reedDebounceTimer;
 TimerHandle_t reedAlarmTimer;
-
 TimerHandle_t shockDebounceTimer;
 
+// Semaphore Handles
 SemaphoreHandle_t alarmTriggered;
 
 void initUART2(uint32_t baud_rate) {
@@ -137,7 +142,7 @@ void UART2_FLEXIO_IRQHandler(void) {
 	char rx_data;
 	static char recv_buffer[MAX_MSG_LEN];
 
-//NVIC_ClearPendingIRQ(UART2_FLEXIO_IRQn);
+	NVIC_ClearPendingIRQ(UART2_FLEXIO_IRQn);
 	if (UART2->S1 & UART_S1_TDRE_MASK) // Send data
 	{
 		if (send_buffer[send_ptr] == '\0') {
@@ -172,6 +177,7 @@ void UART2_FLEXIO_IRQHandler(void) {
 	}
 }
 
+
 void setDoorState(DoorState door) {
 	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
 	systemState.door = door;
@@ -179,12 +185,13 @@ void setDoorState(DoorState door) {
 
 	xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
 }
+
 void setLockState(LockState lock) {
 	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
 	systemState.lock = lock;
 	xSemaphoreGive(systemStateMutex);
 
-	xTaskNotifyGive(sendStateTaskHandle);
+	xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
 	xTaskNotifyGive(servoTaskHandle);     // Fire servo based on desired state
 }
 void setAlarmState(AlarmState alarm) {
@@ -192,7 +199,7 @@ void setAlarmState(AlarmState alarm) {
 	systemState.alarm = alarm;
 	xSemaphoreGive(systemStateMutex);
 
-	xTaskNotifyGive(sendStateTaskHandle);
+	xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
 }
 
 void initReed() {
@@ -284,6 +291,8 @@ void PORTA_IRQHandler() {
 
 	if (PORTA->ISFR & (1 << REED_PIN)) {
 		PORTA->ISFR = (1 << REED_PIN);
+		// Keep starting/reseting timer while reed switch bounces
+		// Callback is only triggered when switch is stable
 		xTimerStartFromISR(reedDebounceTimer, &hpw);
 	}
 
@@ -296,12 +305,15 @@ void PORTC_PORTD_IRQHandler() {
 
 	if (PORTD->ISFR & (1 << SHOCK_PIN)) {
 		PORTD->ISFR = (1 << SHOCK_PIN);
+		// Keep starting/reseting timer while shock sensor bounces
+		// Callback is only triggered when sensor is stable
 		xTimerStartFromISR(shockDebounceTimer, &hpw);
 	}
 
 	portYIELD_FROM_ISR(hpw);
 }
 
+// Callback to trigger once reed switch is stable
 void reedDebouncedCallback(TimerHandle_t xTimer) {
 	uint32_t event;
 	// Check if rising or falling edge
@@ -359,6 +371,7 @@ static void alarmTask(void *p) {
 	}
 }
 
+// Callback to trigger once shock sensor is stable
 void shockDebouncedCallback(TimerHandle_t xTimer) {
 	if (shockTaskHandle != NULL)
 		xTaskNotifyGive(shockTaskHandle);
@@ -371,16 +384,19 @@ static void shockTask(void *p) {
 
 	while (1) {
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		//PRINTF("Shock triggered!\r\n");
 		xQueueSend(sensorDataQueue, &shockData, portMAX_DELAY);
 	}
 }
 
+// Pushes a sensor data json string to the msgQueue
+// JSON Format:
+// {"type":"sensor", "sensor": SensorType, "value": SENSOR_VALUE"}
 static void sendSensorDataTask(void *p) {
 	while (1) {
 		TSensorData sensorData;
 		xQueueReceive(sensorDataQueue, &sensorData, portMAX_DELAY);
 		TMessage msg;
+
 		snprintf(msg.message, MAX_MSG_LEN,
 				"{\"type\":\"sensor\", \"sensor\":%d, \"value\":%d}\r\n",
 				(int32_t) sensorData.sensor, (uint32_t) sensorData.value);
@@ -399,6 +415,7 @@ void sendMessage(char *message) {
 	UART2->C2 |= UART_C2_TE_MASK;
 }
 
+// Util function to parse a command json
 CommandType parseCommand(char *jsonBuffer, size_t jsonLength) {
 	JSONStatus_t result;
 
@@ -408,7 +425,7 @@ CommandType parseCommand(char *jsonBuffer, size_t jsonLength) {
 		return CMD_INVALID;
 	}
 
-	// Try to find a "command field"
+	// Try to find a "command" field
 	char queryKey[] = "command";
 	size_t queryKeyLength = sizeof(queryKey) - 1;
 	char *value;
@@ -420,7 +437,7 @@ CommandType parseCommand(char *jsonBuffer, size_t jsonLength) {
 		return CMD_INVALID;
 	}
 
-	// Parse the value
+	// Parse the value to extract the command
 	char save = value[valueLength];
 	value[valueLength] = '\0';
 	CommandType cmd = (CommandType) atoi(value);
@@ -433,24 +450,23 @@ static void recvTask(void *p) {
 	while (1) {
 		TMessage msg;
 		if (xQueueReceive(queue, (TMessage*) &msg, portMAX_DELAY) == pdTRUE) {
-			PRINTF("Received message: %s\r", msg.message);
+//			PRINTF("Received message: %s\r", msg.message);
 			CommandType cmd = parseCommand(msg.message, strlen(msg.message));
-			PRINTF("Received command: %d\r\n", cmd);
+//			PRINTF("Received command: %d\r\n", cmd);
 
 			switch (cmd) {
 			case (CMD_LOCK):
-				PRINTF("Locking Door.\r\n");
+//				PRINTF("Locking Door.\r\n");
 				setLockState(LOCKED);
 				break;
 			case (CMD_UNLOCK):
-				PRINTF("Unlocking Door.\r\n");
+//				PRINTF("Unlocking Door.\r\n");
 				setLockState(UNLOCKED);
 				break;
-			default:
-				PRINTF("Invalid command.\r\n");
+			default: // Invalid command do nothing
+//				PRINTF("Invalid command.\r\n");
 				break;
 			}
-			PRINTF("\n");
 		}
 	}
 }
@@ -468,22 +484,16 @@ static void servoTask(void *p) {
 	while (1) {
 		// Wait until something changes
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		PRINTF("servoTask: notified, lock=%d\r\n", systemState.lock);
 		SystemState s;
 
 		xSemaphoreTake(systemStateMutex, portMAX_DELAY);
 		s = systemState;
 		xSemaphoreGive(systemStateMutex);
 
-		PRINTF("semaphore done");
-
-		PRINTF("servoTask: lock=%d CnV before=%d\r\n", s.lock,
-				TPM1->CONTROLS[1].CnV);
 		if (s.lock == LOCKED)
 			servoLock();
 		else
 			servoUnlock();
-		PRINTF("servoTask: CnV after=%d\r\n", TPM1->CONTROLS[1].CnV);
 	}
 }
 
@@ -524,7 +534,9 @@ static void ledTask(void *p) {
 	}
 }
 
-// Sends system state (door = CLOSED/OPEN, lock = LOCKED/UNLOCKED)
+// Pushes a system state data json string to the msgQueue
+// JSON Format:
+// {"type":"state", "door": DoorState, "lock": LockState, "alarm": AlarmState}
 static void sendStateTask(void *p) {
 	while (1) {
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -533,11 +545,12 @@ static void sendStateTask(void *p) {
 		xSemaphoreTake(systemStateMutex, portMAX_DELAY);
 		s = systemState;
 		xSemaphoreGive(systemStateMutex);
+
 		TMessage msg;
 		snprintf(msg.message, MAX_MSG_LEN,
 				"{\"type\":\"state\", \"door\":%d, \"lock\":%d, \"alarm\":%d}\r\n",
 				s.door, s.lock, s.alarm);
-		PRINTF("Sending message: %s", msg.message);
+		//PRINTF("Sending message: %s", msg.message);
 		xQueueSend(msgQueue, &msg, portMAX_DELAY);
 	}
 }
@@ -570,7 +583,6 @@ void initSW2(void) {
 	NVIC_ClearPendingIRQ(PORTC_PORTD_IRQn);
 	NVIC_EnableIRQ(PORTC_PORTD_IRQn);
 }
-
 
 /*
  * @brief   Application entry point.

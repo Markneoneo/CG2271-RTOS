@@ -504,13 +504,13 @@ void setup() {
   dbMutex = xSemaphoreCreateMutex();
 
   xTaskCreate(uploadTask, "Upload", 12288, NULL, 1, NULL);
-  xTaskCreate(uartRecvTask, "UART_Rx", 8192, NULL, 2, NULL);
-  xTaskCreate(uartSendTask, "UART_Tx", 8192, NULL, 2, NULL);
+  xTaskCreate(uartRecvTask, "UART_Rx", 8192, NULL, 4, NULL);
+  xTaskCreate(uartSendTask, "UART_Tx", 8192, NULL, 4, NULL);
 
   xTaskCreate(tempTask, "Temp", 8192, NULL, 2, NULL);
-  xTaskCreate(keypadTask, "Keypad", 8192, NULL, 2, NULL);
+  xTaskCreate(keypadTask, "Keypad", 8192, NULL, 3, NULL);
 
-  xTaskCreate(commandPollTask, "CmdPoll", 12288, NULL, 1, NULL);
+  xTaskCreate(commandPollTask, "CmdPoll", 12288, NULL, 2, NULL);
 
   Serial.println("[INIT] All tasks started.\n");
 }

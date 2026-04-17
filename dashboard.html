@@ -5,11 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Prison Realm — Live Dashboard</title>
 
-<!-- Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-<!-- Google Fonts -->
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
 
 <style>
@@ -66,7 +63,6 @@
   }
   .shell { position: relative; z-index: 1; max-width: 1340px; margin: 0 auto; padding: 0 24px 60px; }
 
-  /* ── TOPBAR ── */
   .topbar { display: flex; align-items: center; justify-content: space-between; padding: 22px 0 18px; border-bottom: 1px solid var(--border); }
   .brand  { display: flex; align-items: center; gap: 14px; }
   .brand-icon { width: 42px; height: 42px; border-radius: 8px; background: linear-gradient(135deg, #ff7043, #b71c1c); display: grid; place-items: center; box-shadow: var(--glow-o); font-size: 20px; }
@@ -87,7 +83,6 @@
   .ai-key-err { font-family: var(--mono); font-size: 10px; color: var(--red);        letter-spacing: 1px; white-space: nowrap; }
   .ai-key-chk { font-family: var(--mono); font-size: 10px; color: var(--text-muted); letter-spacing: 1px; white-space: nowrap; }
 
-  /* ── CONFIG BANNER ── */
   .cfg-banner { background: linear-gradient(90deg, #0d1f2d, #0d1318); border: 1px solid var(--border2); border-left: 3px solid var(--amber); border-radius: var(--r); padding: 18px 22px; margin: 22px 0; display: flex; align-items: flex-start; gap: 14px; }
   .cfg-banner .ico { font-size: 20px; flex-shrink: 0; margin-top: 3px; }
   .cfg-banner h3 { font-size: 13px; font-weight: 700; color: var(--amber); margin-bottom: 6px; letter-spacing: .5px; }
@@ -107,7 +102,6 @@
   #demo-btn { background: transparent; border: 1px solid var(--border2); border-radius: var(--r); padding: 9px 20px; font-family: var(--sans); font-weight: 600; font-size: 12px; color: var(--text-dim); cursor: pointer; transition: border-color .2s, color .2s; }
   #demo-btn:hover { border-color: var(--blue); color: var(--blue); }
 
-  /* ── HERO ── */
   .hero {
     margin: 28px 0 24px;
     border: 1px solid var(--border);
@@ -132,7 +126,6 @@
   .hero.h-red    { border-color: #3a0000; box-shadow: inset 0 0 60px #ff3d3d10; }
   .hero.h-red::before    { background: linear-gradient(90deg, transparent, var(--red), transparent); }
 
-  /* LED dot */
   .led-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
   .led {
     width: 56px; height: 56px; border-radius: 50%;
@@ -151,7 +144,6 @@
   }
   .led-label { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); }
 
-  /* Status text */
   .hero-mid { flex: 1; }
   .hero-mid h2 { font-size: 30px; font-weight: 800; letter-spacing: -1px; transition: color .3s; }
   .hero-mid p  { font-family: var(--mono); font-size: 12px; color: var(--text-dim); margin-top: 5px; letter-spacing: 1px; }
@@ -160,7 +152,6 @@
   .c-orange { color: var(--orange); }
   .c-red    { color: var(--red);    }
 
-  /* State badges */
   .badges { display: flex; gap: 12px; }
   .badge  { border: 1px solid var(--border2); border-radius: var(--r); padding: 10px 18px; text-align: center; min-width: 110px; background: var(--surface2); }
   .badge-lbl { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; font-family: var(--mono); }
@@ -172,21 +163,18 @@
   .badge.alarm-active  { border-color: #2a1a00; animation: badge-pulse .8s infinite; }
   @keyframes badge-pulse { 0%,100% { border-color:#3a1a00; } 50% { border-color:#ff704380; } }
 
-  /* ── GRID ── */
   .grid { display: grid; gap: 18px; }
   .g2  { grid-template-columns: 1fr 1fr; }
   .g3  { grid-template-columns: 1fr 1fr 1fr; }
   .g12 { grid-template-columns: 1fr 2fr; }
   @media(max-width: 960px) { .g2,.g3,.g12 { grid-template-columns: 1fr; } }
 
-  /* ── CARD ── */
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 22px 24px; transition: border-color .3s; }
   .card:hover { border-color: var(--border2); }
   .ct { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
   .ct .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 6px var(--orange); }
   .mgap { margin-bottom: 18px; }
 
-  /* ── CONTROLS ── */
   .cbtns { display: flex; flex-direction: column; gap: 12px; }
   .cbtn { border: none; border-radius: var(--r); padding: 14px 20px; font-family: var(--sans); font-weight: 700; font-size: 13px; cursor: pointer; letter-spacing: .5px; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity .2s, transform .1s; }
   .cbtn:hover  { opacity: .85; transform: translateY(-2px); }
@@ -198,7 +186,6 @@
   .cmdst.ok  { color: var(--green); }
   .cmdst.err { color: var(--red); }
 
-  /* ── SENSORS ── */
   .sgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .si { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
   .sn { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
@@ -214,10 +201,8 @@
   .si.shock-triggered { border-color: var(--red); animation: shock-flash .4s; }
   @keyframes shock-flash { 0%,100% { background:var(--surface2) } 50% { background:#1a0000 } }
 
-  /* ── CHART ── */
   .chart-wrap { position: relative; height: 220px; }
 
-  /* ── EVENT LOG ── */
   .elog { max-height: 340px; overflow-y: auto; }
   .elog::-webkit-scrollbar { width: 4px; }
   .elog::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
@@ -227,8 +212,8 @@
   .erow:hover { background: var(--surface2); }
   .ets { color: var(--text-muted); font-size: 11px; }
   .eempty { color: var(--text-muted); font-size: 12px; font-family: var(--mono); padding: 24px 0; text-align: center; }
-  .e-reed-0     { color: var(--green);  }
-  .e-reed-1     { color: var(--amber);  }
+  .e-reed-0     { color: var(--amber);  }
+  .e-reed-1     { color: var(--green);  }
   .e-shock      { color: var(--red);    }
   .e-load       { color: var(--blue);   }
   .e-temperature{ color: #f48fb1;       }
@@ -236,7 +221,6 @@
   .e-unlock     { color: var(--amber);  }
   .e-default    { color: var(--text-dim); }
 
-  /* ── AI PANEL ── */
   .aipanel { background: var(--surface2); border: 1px solid #1a1a3a; border-radius: var(--r); padding: 16px 18px; font-size: 14px; line-height: 1.7; color: var(--text-dim); min-height: 80px; }
   .ailabel { display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--purple); margin-bottom: 10px; }
   .ailabel::before { content: '▶ '; }
@@ -252,7 +236,6 @@
   .aikey input::placeholder { color: var(--text-muted); }
   .aikey-lbl { font-family: var(--mono); font-size: 10px; color: var(--text-muted); letter-spacing: 1px; white-space: nowrap; }
 
-  /* ── RISK SCORE ── */
   .risk-wrap  { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
   .risk-title { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
   .risk-pct   { font-size: 11px; font-weight: 700; transition: color .4s; }
@@ -261,10 +244,8 @@
   .risk-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(255,255,255,.15), transparent); border-radius: 5px; }
   .risk-level { font-family: var(--mono); font-size: 11px; margin-top: 5px; letter-spacing: 1px; transition: color .4s; }
 
-  /* ── FOOTER ── */
   .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
 
-  /* ── ALARM FLASH ── */
   @keyframes alarm-flash { 0%,100% { background:var(--bg) } 50% { background:#110500 } }
   body.alarm-active { animation: alarm-flash .8s infinite; }
 </style>
@@ -272,7 +253,6 @@
 <body>
 <div class="shell">
 
-  <!-- TOPBAR -->
   <header class="topbar">
     <div class="brand">
       <div class="brand-icon">⛩️</div>
@@ -289,7 +269,6 @@
     </div>
   </header>
 
-  <!-- CONFIG BANNER -->
   <div class="cfg-banner" id="cfg-banner" style="display:none">
     <div class="ico">⚙️</div>
     <div style="flex:1">
@@ -308,21 +287,20 @@
         </div>
       </div>
       <div class="cfg-sec">
-        <div class="cfg-sec-title">Google Gemini AI (optional, free)</div>
+        <div class="cfg-sec-title">OpenAI GPT-4o-mini</div>
         <div class="cfg-row">
-          <input id="cfg-gemini" type="password" class="wide" placeholder="Gemini API Key — AIza… (optional)" />
+          <input id="cfg-gemini" type="password" class="wide" placeholder="OpenAI Key — sk-proj-… (optional)" />
           <button class="btn-connect" onclick="manualConnect()">Reconnect</button>
           <button id="demo-btn" onclick="startDemoMode()">Demo Mode</button>
         </div>
         <div class="cfg-note">
-          Free key: <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a>
-          · Model: <strong>gemini-2.0-flash</strong> · 15 req/min — no credit card needed.
+          Get a key at <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>
+          · Model: <strong>gpt-4o-mini</strong> · Very low cost per request.
         </div>
       </div>
     </div>
   </div>
 
-  <!-- STATUS HERO -->
   <div class="hero h-green" id="hero">
     <div class="led-wrap">
       <div class="led c-green" id="led"></div>
@@ -348,10 +326,8 @@
     </div>
   </div>
 
-  <!-- ROW 1: Controls | Sensors | Weight Chart -->
   <div class="grid g3 mgap">
 
-    <!-- Controls -->
     <div class="card">
       <div class="ct"><div class="dot"></div> Remote Control</div>
       <div class="cbtns">
@@ -361,7 +337,6 @@
       <div class="cmdst" id="cmdst">Awaiting command…</div>
     </div>
 
-    <!-- Sensors -->
     <div class="card">
       <div class="ct"><div class="dot"></div> Live Sensor Readings</div>
       <div class="sgrid">
@@ -393,7 +368,6 @@
       </div>
     </div>
 
-    <!-- Weight Chart -->
     <div class="card">
       <div class="ct"><div class="dot"></div> Weight History — HX711</div>
       <div class="chart-wrap"><canvas id="wChart"></canvas></div>
@@ -401,17 +375,15 @@
 
   </div>
 
-  <!-- ROW 2: AI | Event Log -->
   <div class="grid g12">
 
-    <!-- AI Threat Assessment -->
     <div class="card">
       <div class="ct">
         <div class="dot" style="background:var(--purple);box-shadow:0 0 6px var(--purple)"></div>
         AI Threat Assessment
       </div>
       <div class="aipanel" id="aipanel">
-        <div class="ailabel">Gemini 2.0 Flash</div><br/>
+        <div class="ailabel">GPT-4o-mini</div><br/>
         <span class="aiempty">No shock events. AI assessment activates automatically when the shock sensor fires.</span>
       </div>
       <div class="risk-wrap">
@@ -425,14 +397,13 @@
         <div class="risk-level" id="risk-level" style="color:var(--text-muted)">Awaiting analysis…</div>
       </div>
       <div class="aikey">
-        <span class="aikey-lbl">GEMINI KEY</span>
-        <input id="gemini-inline" type="password" placeholder="AIza…" />
+        <span class="aikey-lbl">OPENAI KEY</span>
+        <input id="gemini-inline" type="password" placeholder="sk-proj-…" />
         <span id="ai-key-status" class="ai-key-chk">—</span>
-        <button onclick="verifyGeminiKey()" style="background:transparent;border:1px solid var(--border2);border-radius:var(--r);padding:6px 12px;font-family:var(--mono);font-size:10px;color:var(--text-dim);cursor:pointer;white-space:nowrap;" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--border2)'">TEST KEY</button>
+        <button onclick="verifyOpenAIKey()" style="background:transparent;border:1px solid var(--border2);border-radius:var(--r);padding:6px 12px;font-family:var(--mono);font-size:10px;color:var(--text-dim);cursor:pointer;white-space:nowrap;" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--border2)'">TEST KEY</button>
       </div>
     </div>
 
-    <!-- Event Log -->
     <div class="card">
       <div class="ct">
         <div class="dot"></div> Event Log — sensor_logs + commands
@@ -449,17 +420,22 @@
   <footer class="footer">
     <span>PrisonRealm · CG2271 RTOS · AY2025/26 S2</span>
     <span id="lupdate">Last update: —</span>
-    <span>Supabase Realtime · Google Gemini 2.0 Flash</span>
+    <span>Supabase Realtime · OpenAI GPT-4o-mini</span>
   </footer>
 
 </div>
 
-<script src="config.js"></script>
 <script>
 // ──────────────────────────────────────────────────────────────────
-//  CONFIG
+//  CONFIG — fallback values if config.js is absent
 // ──────────────────────────────────────────────────────────────────
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+// FIX #5: Provide inline fallbacks so the page doesn't crash if
+// config.js is missing or fails to define these variables.
+if (typeof SUPA_URL    === 'undefined') window.SUPA_URL    = '';
+if (typeof SUPA_ANON   === 'undefined') window.SUPA_ANON   = '';
+if (typeof OPENAI_KEY  === 'undefined') window.OPENAI_KEY  = '';
+
+const OPENAI_URL      = 'https://api.openai.com/v1/chat/completions';
 const SHOCK_RECENT_MS = 60_000;
 const SHOCK_ALARM_MS  = 30_000;
 
@@ -473,8 +449,8 @@ let demoTimer     = null;
 let riskAnimFrame = null;
 
 const state = {
-  door:      0,
-  lock:      0,
+  door:      0,   // 0 = closed, 1 = open
+  lock:      0,   // 0 = locked, 1 = unlocked
   alarm:     false,
   weight:    null,
   temp:      null,
@@ -490,6 +466,21 @@ setInterval(() => {
     [d.getHours(), d.getMinutes(), d.getSeconds()]
       .map(n => String(n).padStart(2, '0')).join(':');
 }, 1000);
+
+// ──────────────────────────────────────────────────────────────────
+//  FIX #4: Alarm auto-clear runs on its own timer, not inside the
+//  sensor handler, so it doesn't fire on every unrelated reading.
+// ──────────────────────────────────────────────────────────────────
+setInterval(() => {
+  if (!state.lastShock) return;
+  const age = Date.now() - state.lastShock.getTime();
+  if (age > SHOCK_RECENT_MS) {
+    document.getElementById('s-shock').textContent = 'CLEAR';
+    document.getElementById('s-shock').className   = 'sv vg';
+  }
+  // alarm is now driven solely by is_alarm_on in the state table
+  // (removed: state.alarm auto-clear from shock timer)
+}, 2000);
 
 // ──────────────────────────────────────────────────────────────────
 //  CHART
@@ -544,32 +535,20 @@ function pushWeight(w) {
 // ──────────────────────────────────────────────────────────────────
 //  LED / HERO RENDER
 // ──────────────────────────────────────────────────────────────────
-function getLEDConfig(door, lock, alarm) {
-  // closed is 0, open is 1
-  // locked is 0, unlocked is 1
-  
-  // closed + locked
+function getLEDConfig(door, lock) {
   if (door === 0 && lock === 0)
-    return { color: 'green', cls: 'h-green', lbl: 'SECURE', sub: 'Door closed · Locked · No active alerts' };
-
-  // closed + unlocked
+    return { color: 'green',  cls: 'h-green',  lbl: 'SECURE',          sub: 'Door closed · Locked · No active alerts' };
   if (door === 0 && lock === 1)
-    return { color: 'amber', cls: 'h-amber', lbl: 'UNLOCKED', sub: 'Door closed · Unlocked · Ready to open' };
-
-  // open + locked
+    return { color: 'amber',  cls: 'h-amber',  lbl: 'UNLOCKED',        sub: 'Door closed · Unlocked · Ready to open' };
   if (door === 1 && lock === 0)
-    return { color: 'orange', cls: 'h-orange', lbl: 'DOOR OPEN', sub: 'Door open · Lock engaged' };
-
-  // open + unlocked
+    return { color: 'orange', cls: 'h-orange', lbl: 'DOOR OPEN',       sub: 'Door open · Lock engaged' };
   if (door === 1 && lock === 1)
-    return { color: 'red', cls: 'h-red', lbl: 'OPEN & UNLOCKED', sub: 'Door open · Unlocked' };
-
+    return { color: 'red',    cls: 'h-red',    lbl: 'OPEN & UNLOCKED', sub: 'Door open · Unlocked' };
   return { color: 'green', cls: 'h-green', lbl: 'UNKNOWN', sub: '' };
 }
 
 function renderHero() {
-  const alarmActive = state.alarm;
-  const cfg = getLEDConfig(state.door, state.lock, alarmActive);
+  const cfg = getLEDConfig(state.door, state.lock);
 
   document.getElementById('hero').className = `hero ${cfg.cls}`;
 
@@ -595,11 +574,11 @@ function renderHero() {
 
   const balarm  = document.getElementById('badge-alarm');
   const bvalarm = document.getElementById('bv-alarm');
-  balarm.className      = `badge${alarmActive ? ' alarm-active' : ''}`;
-  bvalarm.style.color   = alarmActive ? 'var(--orange)' : 'var(--text-muted)';
-  bvalarm.textContent   = alarmActive ? 'ACTIVE' : 'INACTIVE';
+  balarm.className      = `badge${state.alarm ? ' alarm-active' : ''}`;
+  bvalarm.style.color   = state.alarm ? 'var(--orange)' : 'var(--text-muted)';
+  bvalarm.textContent   = state.alarm ? 'ACTIVE' : 'INACTIVE';
 
-  if (alarmActive) document.body.classList.add('alarm-active');
+  if (state.alarm) document.body.classList.add('alarm-active');
   else             document.body.classList.remove('alarm-active');
 }
 
@@ -611,7 +590,9 @@ function applySensorReading(sensor_type, value, created_at) {
 
   switch (sensor_type) {
     case 'reed': {
-      state.door = value;
+      // FIX #3: reed value 1 = door OPEN, reed value 0 = door CLOSED
+      // (was inverted relative to the event log labels in the original)
+      state.door = value ? 1 : 0;
       const el = document.getElementById('s-reed');
       el.textContent = value ? 'OPEN' : 'CLOSED';
       el.className   = `sv ${value ? 'va' : 'vg'}`;
@@ -632,7 +613,7 @@ function applySensorReading(sensor_type, value, created_at) {
     case 'shock': {
       if (value) {
         state.lastShock = ts;
-        state.alarm     = true;
+        // alarm is now driven solely by is_alarm_on in the state table
         const el = document.getElementById('s-shock');
         el.textContent = 'TRIGGERED';
         el.className   = 'sv vr';
@@ -641,54 +622,69 @@ function applySensorReading(sensor_type, value, created_at) {
         setTimeout(() => siShock.classList.remove('shock-triggered'), 400);
         document.getElementById('s-shock-time').textContent =
           ts.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        callGemini();
+        callOpenAI();
       }
       break;
     }
   }
 
-  if (state.lastShock && (Date.now() - state.lastShock.getTime()) > SHOCK_RECENT_MS) {
-    document.getElementById('s-shock').textContent = 'CLEAR';
-    document.getElementById('s-shock').className   = 'sv vg';
-  }
-  if (state.lastShock && (Date.now() - state.lastShock.getTime()) > SHOCK_ALARM_MS) {
-    state.alarm = false;
-  }
+  // FIX #4 (continued): alarm-clear logic removed from here;
+  // it now lives in the dedicated setInterval above.
 
   document.getElementById('lupdate').textContent = `Last update: ${new Date().toLocaleTimeString()}`;
   renderHero();
 }
 
 // ──────────────────────────────────────────────────────────────────
-//  SNAPSHOT
+//  SNAPSHOT — apply an array of rows to seed initial display
+// ──────────────────────────────────────────────────────────────────
+// FIX #1: applySnapshot was called in startDemoMode() but never
+// defined. Added here so demo mode initialises correctly.
+function applySnapshot(rows) {
+  // Process oldest-first so the most recent wins
+  const sorted = [...rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  for (const row of sorted) {
+    applySensorReading(row.sensor_type, row.value, row.created_at);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  STATE TABLE FETCH (optional — only used if a `state` table exists)
 // ──────────────────────────────────────────────────────────────────
 async function fetchState() {
-  const { data, error } = await supa
-    .from('state')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-  if (error || !data) return;
-  state.door  = data.is_door_open   ? 1 : 0;
-  state.lock  = data.is_door_locked ? 0 : 1; // locked=0, unlocked=1
-  state.alarm = data.is_alarm_on;
-  renderHero();
+  try {
+    const { data, error } = await supa
+      .from('state')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    if (error || !data) return;
+    // FIX #2: mapping matches the realtime handler — is_door_locked=true → locked → state.lock=0
+    state.door  = data.is_door_open   ? 1 : 0;
+    state.lock  = data.is_door_locked ? 0 : 1;
+    state.alarm = !!data.is_alarm_on;
+    renderHero();
+  } catch (_) {
+    // `state` table doesn't exist — that's fine, sensor_logs drives the UI
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────
 //  EVENT LOG
 // ──────────────────────────────────────────────────────────────────
+// FIX #3 (continued): EVENT_LABELS reed mapping corrected to match
+// applySensorReading (value 1 = open door)
 const EVENT_LABELS = {
-  'reed':        v => v === 0 ? 'DOOR OPENED'     : 'DOOR CLOSED',
-  'shock':       v => v       ? 'SHOCK TRIGGERED'  : 'SHOCK CLEAR',
+  'reed':        v => v ? 'DOOR OPENED'       : 'DOOR CLOSED',
+  'shock':       v => v ? 'SHOCK TRIGGERED'   : 'SHOCK CLEAR',
   'load':        v => `WEIGHT: ${Math.round(v)} g`,
   'temperature': v => `TEMP: ${v.toFixed(1)}°C`,
 };
 
 const EVENT_CSS = {
-  'reed-0':      'e-reed-0',
-  'reed-1':      'e-reed-1',
+  'reed-0':      'e-reed-1',   // closed = green
+  'reed-1':      'e-reed-0',   // open   = amber
   'shock':       'e-shock',
   'load':        'e-load',
   'temperature': 'e-temperature',
@@ -772,28 +768,29 @@ async function sendCommand(cmd) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-//  GEMINI AI
+//  OPENAI GPT-4o-mini
 // ──────────────────────────────────────────────────────────────────
-function geminiKey() {
+function openaiKey() {
   return (document.getElementById('gemini-inline')?.value || '').trim()
       || (document.getElementById('cfg-gemini')?.value    || '').trim()
-      || GEMINI_KEY;
+      || OPENAI_KEY;
 }
 
-async function verifyGeminiKey() {
-  const key    = geminiKey();
+async function verifyOpenAIKey() {
+  const key    = openaiKey();
   const status = document.getElementById('ai-key-status');
   if (!key) { status.textContent = 'NO KEY'; status.className = 'ai-key-err'; return; }
 
   status.textContent = 'CHECKING…';
   status.className   = 'ai-key-chk';
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${key}`, {
+    const res = await fetch(OPENAI_URL, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: 'Reply with just the word: OK' }] }],
-        generationConfig: { maxOutputTokens: 5 }
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: 'Reply with just the word: OK' }],
+        max_tokens: 5
       })
     });
     if (res.ok) {
@@ -801,7 +798,7 @@ async function verifyGeminiKey() {
       status.className   = 'ai-key-ok';
     } else {
       const e = await res.json();
-      status.textContent = `✗ ${e?.error?.status || 'INVALID'}`;
+      status.textContent = `✗ ${e?.error?.code || 'INVALID'}`;
       status.className   = 'ai-key-err';
     }
   } catch (e) {
@@ -812,78 +809,118 @@ async function verifyGeminiKey() {
 
 function setAIThinking() {
   document.getElementById('aipanel').innerHTML =
-    `<div class="ailabel">Gemini 2.0 Flash</div><br/>
+    `<div class="ailabel">GPT-4o-mini</div><br/>
      <div class="aithink"><span></span><span></span><span></span> Analysing shock event…</div>`;
   updateRiskScore(40, 'ANALYSING…');
 }
 
 function setAI(html) {
   document.getElementById('aipanel').innerHTML =
-    `<div class="ailabel">Gemini 2.0 Flash</div><br/>${html}`;
+    `<div class="ailabel">GPT-4o-mini</div><br/>${html}`;
 }
 
-async function callGemini() {
-  const key = geminiKey();
+// Handle for AI panel 30-second auto-clear
+let aiClearTimer = null;
+
+function clearAIPanel() {
+  document.getElementById('aipanel').innerHTML =
+    `<div class="ailabel">GPT-4o-mini</div><br/>
+     <span class="aiempty">Threat cleared — no shock events in the last 30 seconds.</span>`;
+  animateRiskTo(0);
+}
+
+function scheduleAIClear() {
+  if (aiClearTimer) clearTimeout(aiClearTimer);
+  aiClearTimer = setTimeout(clearAIPanel, 30_000);
+}
+
+async function callOpenAI() {
+  const key = openaiKey();
   if (!key) {
-    setAI(`<span class="aiempty">⚠ Shock detected — paste a Gemini API key below to enable AI threat assessment.</span>`);
+    setAI(`<span class="aiempty">⚠ Shock detected — paste an OpenAI API key below to enable AI threat assessment.</span>`);
     updateRiskScore(60, 'KEY REQUIRED — estimated MEDIUM risk');
+    scheduleAIClear();
     return;
   }
+  // Authorised access: door open + unlocked = password entry, clear threat immediately
+  if (state.door === 1 && state.lock === 1) {
+    setAI(`<span style="color:var(--green)">✓ Authorised access — door opened with unlock command. No threat detected.</span>`);
+    animateRiskTo(0);
+    if (aiClearTimer) clearTimeout(aiClearTimer);
+    return;
+  }
+
   setAIThinking();
+  scheduleAIClear(); // auto-clear panel 30s after last shock
 
-  const ctx = {
-    door:     state.door  ? 'OPEN'     : 'CLOSED',
-    lock:     state.lock  ? 'UNLOCKED' : 'LOCKED',
-    alarm:    state.alarm ? 'ACTIVE'   : 'INACTIVE',
-    weight_g: state.weight ?? '(unknown)',
-    temp_c:   state.temp   ?? '(unknown)',
-  };
+  const doorStr = state.door ? 'OPEN' : 'CLOSED';
+  const lockStr = state.lock ? 'UNLOCKED' : 'LOCKED';
 
-  const prompt = `You are a security analyst monitoring a smart door lock (Prison Realm IoT system).
+  // Explain the access context to GPT so it reasons correctly
+  let accessNote;
+  if      (state.door === 0 && state.lock === 0)
+    accessNote = 'Door is CLOSED and LOCKED. Shock while fully secured is suspicious.';
+  else if (state.door === 1 && state.lock === 0)
+    accessNote = 'Door is OPEN but lock is still LOCKED. This is the most suspicious combination.';
+  else
+    accessNote = 'Door is CLOSED but lock is UNLOCKED. System may be transitioning.';
 
-Current sensor state:
-- Door:        ${ctx.door}
-- Lock:        ${ctx.lock}
-- Alarm:       ${ctx.alarm}
-- Weight:      ${ctx.weight_g} g inside
-- Temperature: ${ctx.temp_c} °C
+  const prompt = `You are a security analyst monitoring a smart door lock.
 
-A shock sensor just fired. The door is currently ${ctx.door} and the lock is ${ctx.lock}.
+Sensor state when shock fired:
+- Door: ${doorStr}
+- Lock: ${lockStr}
+- Weight inside: ${state.weight ?? '(unknown)'} g
+- Temperature: ${state.temp ?? '(unknown)'} °C
+- Context: ${accessNote}
+
+Rules for your assessment:
+- Door CLOSED + LOCKED with shock: HIGH suspicion of intrusion attempt.
+- Door OPEN + LOCKED (forced open): VERY HIGH suspicion, likely forced entry.
+- Door CLOSED + UNLOCKED: LOW-MEDIUM suspicion, system in transition.
+- If door is OPEN and UNLOCKED, this function would not have been called (authorised access).
 
 Respond in exactly 2 sentences:
-1. Whether this is a genuine intrusion attempt or likely accidental vibration, and why.
-2. The single most important immediate action for the owner to take.
+1. Likelihood of intrusion vs accidental vibration based on the sensor context, and why.
+2. The single most important immediate action for the owner.
 Plain text only — no markdown, no bullet points.`;
 
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${key}`, {
+    const res = await fetch(OPENAI_URL, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 180, temperature: 0.35 }
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 180,
+        temperature: 0.35
       })
     });
     if (!res.ok) {
       const e = await res.json();
-      setAI(`<span style="color:var(--red)">⚠ Gemini error: ${e?.error?.message || 'HTTP ' + res.status}</span>`);
+      setAI(`<span style="color:var(--red)">⚠ OpenAI error: ${e?.error?.message || 'HTTP ' + res.status}</span>`);
       updateRiskScore(50, 'ERROR — score unavailable');
       return;
     }
     const j   = await res.json();
-    const txt = j?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response.';
+    const txt = j?.choices?.[0]?.message?.content || 'No response.';
 
-    let risk = 50;
-    if (/intrusion|forced|break.?in|genuine|serious|criminal|breach|tamper/i.test(txt)) risk = 85;
-    else if (/unlikely|false.?alarm|accidental|vibration|no immediate/i.test(txt))      risk = 15;
-    if (ctx.door === 'OPEN' && ctx.lock === 'LOCKED')   risk = Math.min(100, risk + 15);
-    if (ctx.door === 'OPEN' && ctx.lock === 'UNLOCKED') risk = Math.min(100, risk + 10);
+    // Base risk from physical state (most reliable signal)
+    let risk;
+    if      (state.door === 1 && state.lock === 0) risk = 90; // OPEN + LOCKED = forced
+    else if (state.door === 0 && state.lock === 0) risk = 65; // CLOSED + LOCKED = suspicious
+    else                                           risk = 25; // transition state
+    // Keyword fine-tune from GPT response
+    if (/intrusion|forced|break.?in|genuine|serious|criminal|breach/i.test(txt))
+      risk = Math.min(100, risk + 10);
+    else if (/unlikely|false.?alarm|accidental|vibration|no immediate/i.test(txt))
+      risk = Math.max(0, risk - 20);
     updateRiskScore(risk);
 
     const html = txt
-      .replace(/(intrusion|forced|break-in|genuine|immediate|serious|inspect|criminal|breach|tamper)/gi,
+      .replace(/(intrusion|forced|break-in|genuine|serious|criminal|breach)/gi,
                '<strong style="color:var(--red)">$1</strong>')
-      .replace(/(false alarm|vibration|accidental|unlikely|no immediate)/gi,
+      .replace(/(unlikely|false.alarm|accidental|vibration|no immediate)/gi,
                '<strong style="color:var(--amber)">$1</strong>');
     setAI(html);
   } catch (e) {
@@ -958,19 +995,20 @@ async function connectSupabase(url, anon) {
   cachedSensorRows  = sRows || [];
   cachedCommandRows = cRows || [];
 
-  fetchState()
+  // Seed initial display from historical rows
+  applySnapshot(cachedSensorRows);
+  fetchState();
   renderEventLog(cachedSensorRows, cachedCommandRows);
-  renderHero();
 
   supa.channel('rt-state')
-  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'state' }, payload => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'state' }, payload => {
       const d = payload.new;
       state.door  = d.is_door_open   ? 1 : 0;
       state.lock  = d.is_door_locked ? 0 : 1;
-      state.alarm = d.is_alarm_on;
+      state.alarm = !!d.is_alarm_on;
       renderHero();
-  })
-  .subscribe();
+    })
+    .subscribe();
 
   supa.channel('rt-sensors')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sensor_logs' }, payload => {
@@ -1055,7 +1093,6 @@ function addDemoEvent(label, cmd, value) {
 }
 
 function startDemoMode() {
-  // Toggle off — return to live
   if (isDemo) {
     isDemo = false;
     if (demoTimer) clearInterval(demoTimer);
@@ -1071,14 +1108,13 @@ function startDemoMode() {
     return;
   }
 
-  // Toggle on
   isDemo = true;
   if (supa) supa.removeAllChannels();
   document.getElementById('cfg-banner').style.display = 'none';
   document.getElementById('btn-demo').classList.add('active');
   setConnected('demo');
 
-  Object.assign(state, { door: 1, lock: 1, alarm: false, weight: null, temp: null, lastShock: null });
+  Object.assign(state, { door: 1, lock: 1, weight: null, temp: null, lastShock: null });
   demoSensorRows  = [];
   demoCommandRows = [];
   demoTick   = 0;
@@ -1090,12 +1126,14 @@ function startDemoMode() {
     { id: 2, sensor_type: 'load',        value: 200,  created_at: new Date(now - 25000).toISOString() },
     { id: 3, sensor_type: 'temperature', value: 26.3, created_at: new Date(now - 20000).toISOString() },
   ];
+
+  // FIX #1: applySnapshot is now defined and works correctly
   applySnapshot(demoSensorRows);
   renderEventLog(demoSensorRows, []);
   renderHero();
 
   document.getElementById('aipanel').innerHTML =
-    `<div class="ailabel">Gemini 2.0 Flash</div><br/>
+    `<div class="ailabel">GPT-4o-mini</div><br/>
      <span class="aiempty">AI key loaded. Shock event fires at ~22s into demo — AI analysis will trigger automatically.</span>`;
   document.getElementById('cmdst').textContent = 'Demo mode — commands simulated locally.';
 
@@ -1121,7 +1159,7 @@ function startDemoMode() {
 
     if (demoTick > 45) {
       demoTick = 0;
-      Object.assign(state, { door: 1, lock: 1, alarm: false, weight: null, temp: null, lastShock: null });
+      Object.assign(state, { door: 1, lock: 1, weight: null, temp: null, lastShock: null });
       document.getElementById('s-shock').textContent = 'CLEAR';
       document.getElementById('s-shock').className   = 'sv vg';
       animateRiskTo(0);
@@ -1137,13 +1175,19 @@ window.addEventListener('load', () => {
   initChart();
   renderHero();
 
-  if (GEMINI_KEY) {
-    document.getElementById('gemini-inline').value = GEMINI_KEY;
-    document.getElementById('cfg-gemini').value    = GEMINI_KEY;
-    verifyGeminiKey();
+  if (OPENAI_KEY) {
+    document.getElementById('gemini-inline').value = OPENAI_KEY;
+    document.getElementById('cfg-gemini').value    = OPENAI_KEY;
+    verifyOpenAIKey();
   }
 
   setTimeout(() => {
+    if (!SUPA_URL || !SUPA_ANON) {
+      document.getElementById('cfg-banner').style.display = 'flex';
+      document.getElementById('conn-dot').className       = 'conn-dot';
+      document.getElementById('conn-label').textContent   = 'NOT CONFIGURED';
+      return;
+    }
     connectSupabase(SUPA_URL, SUPA_ANON)
       .then(() => {
         setConnected('live');

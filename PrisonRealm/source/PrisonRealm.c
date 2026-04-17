@@ -89,7 +89,6 @@ TimerHandle_t reedAlarmTimer;
 TimerHandle_t shockDebounceTimer;
 
 // Semaphore Handles
-SemaphoreHandle_t alarmTriggered;
 
 void initUART2(uint32_t baud_rate) {
 	NVIC_DisableIRQ(UART2_FLEXIO_IRQn);
@@ -182,7 +181,6 @@ void UART2_FLEXIO_IRQHandler(void) {
 		}
 	}
 }
-
 
 // State Utilities
 void setDoorState(DoorState door) {
@@ -350,22 +348,6 @@ static void reedTask(void *p) {
 
 		setDoorState((event == CLOSED) ? CLOSED : OPEN);
 
-		// Actions
-//		switch (event) {
-//		case CLOSED:
-//			setAlarmState(ALARM_INACTIVE);
-//			xTimerStop(reedAlarmTimer, 0);
-//			GPIOA->PCOR |= (1 << BUZZER_PIN);
-//			reedData.value = (uint32_t) CLOSED;
-//			break;
-//		case OPEN:
-//			xTimerStart(reedAlarmTimer, 0);
-//			reedData.value = (uint32_t) OPEN;
-//			break;
-//		default:
-//			break;
-//		}
-
 		switch (event) {
 		case CLOSED:
 			xTimerStop(reedAlarmTimer, 0);
@@ -385,18 +367,12 @@ static void reedTask(void *p) {
 }
 
 void reedAlarmCallback(TimerHandle_t xTimer) {
-//	xSemaphoreGive(alarmTriggered);
 	xTaskNotify(alarmTaskHandle, (uint32_t ) ALARM_ACTIVE,
 			eSetValueWithOverwrite);
 }
 
 static void alarmTask(void *p) {
 	while (1) {
-//		xSemaphoreTake(alarmTriggered, portMAX_DELAY);
-//		setAlarmState(ALARM_ACTIVE);
-		//PRINTF("Timer has gone off\r\n");
-//		GPIOA->PSOR |= (1 << BUZZER_PIN);
-
 		uint32_t event;
 		// Clear all bits on exit
 		xTaskNotifyWait(0, 0xFFFFFFFF, &event, portMAX_DELAY);
@@ -488,24 +464,39 @@ CommandType parseCommand(char *jsonBuffer, size_t jsonLength) {
 	return cmd;
 }
 
+static void sendAck(void) {
+	TMessage ack;
+	snprintf(ack.message, MAX_MSG_LEN, "{\"type\":\"ack\"}\r\n");
+	xQueueSend(msgQueue, &ack, portMAX_DELAY);
+}
+
+static void sendNack(void) {
+	TMessage nack;
+	snprintf(nack.message, MAX_MSG_LEN, "{\"type\":\"nack\"}\r\n");
+	xQueueSend(msgQueue, &nack, portMAX_DELAY);
+}
+
 static void recvTask(void *p) {
 	while (1) {
 		TMessage msg;
 		if (xQueueReceive(queue, (TMessage*) &msg, portMAX_DELAY) == pdTRUE) {
-//			PRINTF("Received message: %s\r", msg.message);
+			PRINTF("Received message: %s\r", msg.message);
 			CommandType cmd = parseCommand(msg.message, strlen(msg.message));
-//			PRINTF("Received command: %d\r\n", cmd);
+			PRINTF("Received command: %d\r\n", cmd);
 
 			switch (cmd) {
 			case (CMD_LOCK):
 //				PRINTF("Locking Door.\r\n");
 				setLockState(LOCKED);
+				sendAck();
 				break;
 			case (CMD_UNLOCK):
 //				PRINTF("Unlocking Door.\r\n");
 				setLockState(UNLOCKED);
+				sendAck();
 				break;
 			default: // Invalid command do nothing
+				sendNack();
 //				PRINTF("Invalid command.\r\n");
 				break;
 			}
@@ -643,7 +634,6 @@ int main(void) {
 	sensorDataQueue = xQueueCreate(QLEN, sizeof(TSensorData));
 
 	// Semaphores
-	alarmTriggered = xSemaphoreCreateBinary();
 	txDoneSem = xSemaphoreCreateBinary();
 	xSemaphoreGive(txDoneSem);
 

@@ -351,6 +351,9 @@ static void commandPollTask(void *pv) {
 // Blocks on commandQueue indefitintely.
 // When TCommand arrives, it serialise it to JSON and writes it to Serial1
 //
+// Task blocks on here until RX tells if ACK/NACK, or it just timed out
+// Attempts to retry until max count
+//
 // After successful send, if WiFi doesnt fail me, it marks the Supabase row executed
 // so the command isnt reissued on the next poll.
 static void uartSendTask(void *pv) {
@@ -548,8 +551,6 @@ void setup() {
 
   // Single mutex protects the Supabase db object across all tasks
   dbMutex = xSemaphoreCreateMutex();
-
-  ackSem = xSemaphoreCreateBinary();
 
   xTaskCreate(uploadTask, "Upload", 12288, NULL, 1, NULL);
   xTaskCreate(uartRecvTask, "UART_Rx", 8192, NULL, 2, NULL);

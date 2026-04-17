@@ -261,10 +261,9 @@ static void markCommandExecuted(int commandId) {
 //
 // Runs at low prio to ensure it doesnt starve time critical tasks
 // (UART, keypad)
-static void uploadTask(void *pv) {
+static void uploadSensorTask(void *pv) {
   for (;;) {
     TSensorData sensorEntry;
-    SystemState stateEntry;
 
     if (xQueueReceive(uploadQueue, &sensorEntry, 0) == pdTRUE) {
       if (WiFi.status() == WL_CONNECTED)
@@ -272,6 +271,12 @@ static void uploadTask(void *pv) {
       else
         Serial.println("[UPLOAD] WiFi disconnected - dropping sensor entry.");
     }
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+static void uploadStateTask(void *pv) {
+  for (;;) {
+    SystemState stateEntry;
 
     if (xQueueReceive(stateQueue, &stateEntry, 0) == pdTRUE) {
       if (WiFi.status() == WL_CONNECTED)
@@ -279,7 +284,6 @@ static void uploadTask(void *pv) {
       else
         Serial.println("[UPLOAD] WiFi disconnected - dropping state entry.");
     }
-
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
@@ -380,8 +384,9 @@ static void uartSendTask(void *pv) {
       if (ok == pdTRUE && notifValue == NOTIF_ACK) {
         // Got an ACK
         numFailedAttempts = 0;
-        Serial.println("[UART TX] ACK received");
+        Serial.println("[UART TX] ACK received.");
       } else {
+        Serial.println("[UART TX] NACK received. Will retry.");
         // Either timeout or NACK
         // In both cases, increment counter and retry if below limit.
         numFailedAttempts++;
@@ -389,6 +394,7 @@ static void uartSendTask(void *pv) {
         if (numFailedAttempts < MAX_RETRIES) {
           xQueueSendToFront(commandQueue, &prevCmd, 0);
         } else {
+          Serial.println("[UART TX] Max retries reached. Giving up on command.");
           numFailedAttempts = 0; // Give up
         }
       }
@@ -419,12 +425,10 @@ static void uartRecvTask(void *pv) {
           //   {"type":"state",  "door":N, "lock":N, "alarm":N} — ignore
           const char *type = doc["type"] | "sensor";  // default for legacy messages without "type"
           if (strcmp(type, "ack") == 0) {
-            Serial.println("[UART RX] ACK received.");
             xTaskNotify(uartSendTaskHandle, NOTIF_ACK, eSetValueWithOverwrite);
 
           } else if (strcmp(type, "nack") == 0) {
             // Chinese wires have failed us
-            Serial.printf("[UART RX] NACK received.\n");
             xTaskNotify(uartSendTaskHandle, NOTIF_NACK, eSetValueWithOverwrite);
 
           } else if (strcmp(type, "sensor") == 0) {
@@ -434,12 +438,18 @@ static void uartRecvTask(void *pv) {
             Serial.printf("[UART RX] sensor=%d value=%.2f\n",
                           (int)entry.sensor, entry.value);
             xQueueSend(uploadQueue, &entry, 0);
+          } else if (strcmp(type, "state") == 0) {
+            SystemState state;
+            state.door = (DoorState)(doc["door"] | 0);
+            state.lock = (LockState)(doc["lock"] | 0);
+            state.alarm = (AlarmState)(doc["alarm"] | 0);
+            Serial.printf("[UART RX] state: door=%d lock=%d alarm=%d\n",
+                state.door, state.lock, state.alarm);
+            xQueueSend(stateQueue, &state, 0);
           } else {
-            Serial.printf("[UART RX] Ignoring type='%s'\n", type);
-          }
-        } else {
-          Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
+            Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",
                         err.c_str(), line.c_str());
+          }
         }
       }
     }
@@ -552,14 +562,15 @@ void setup() {
   // Single mutex protects the Supabase db object across all tasks
   dbMutex = xSemaphoreCreateMutex();
 
-  xTaskCreate(uploadTask, "Upload", 12288, NULL, 1, NULL);
-  xTaskCreate(uartRecvTask, "UART_Rx", 8192, NULL, 2, NULL);
-  xTaskCreate(uartSendTask, "UART_Tx", 8192, NULL, 2, &uartSendTaskHandle);
+  xTaskCreate(uploadSensorTask, "UploadSensor", 12288, NULL, 1, NULL);
+  xTaskCreate(uploadStateTask, "UploadState", 12288, NULL, 2, NULL);
+  xTaskCreate(uartRecvTask, "UART_Rx", 8192, NULL, 4, NULL);
+  xTaskCreate(uartSendTask, "UART_Tx", 8192, NULL, 4, &uartSendTaskHandle);
 
   xTaskCreate(tempTask, "Temp", 8192, NULL, 2, NULL);
-  xTaskCreate(keypadTask, "Keypad", 8192, NULL, 2, NULL);
+  xTaskCreate(keypadTask, "Keypad", 8192, NULL, 3, NULL);
 
-  xTaskCreate(commandPollTask, "CmdPoll", 12288, NULL, 1, NULL);
+  xTaskCreate(commandPollTask, "CmdPoll", 12288, NULL, 2, NULL);
 
   Serial.println("[INIT] All tasks started.\n");
 }

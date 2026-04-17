@@ -178,7 +178,6 @@ void UART2_FLEXIO_IRQHandler(void) {
 	}
 }
 
-
 // State Utilities
 void setDoorState(DoorState door) {
 	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
@@ -485,24 +484,39 @@ CommandType parseCommand(char *jsonBuffer, size_t jsonLength) {
 	return cmd;
 }
 
+static void sendAck(void) {
+	TMessage ack;
+	snprintf(ack.message, MAX_MSG_LEN, "{\"type\":\"ack\"}\r\n");
+	xQueueSend(msgQueue, &ack, portMAX_DELAY);
+}
+
+static void sendNack(void) {
+	TMessage nack;
+	snprintf(nack.message, MAX_MSG_LEN, "{\"type\":\"nack\"}\r\n");
+	xQueueSend(msgQueue, &nack, portMAX_DELAY);
+}
+
 static void recvTask(void *p) {
 	while (1) {
 		TMessage msg;
 		if (xQueueReceive(queue, (TMessage*) &msg, portMAX_DELAY) == pdTRUE) {
-//			PRINTF("Received message: %s\r", msg.message);
+			PRINTF("Received message: %s\r", msg.message);
 			CommandType cmd = parseCommand(msg.message, strlen(msg.message));
-//			PRINTF("Received command: %d\r\n", cmd);
+			PRINTF("Received command: %d\r\n", cmd);
 
 			switch (cmd) {
 			case (CMD_LOCK):
 //				PRINTF("Locking Door.\r\n");
 				setLockState(LOCKED);
+				sendAck();
 				break;
 			case (CMD_UNLOCK):
 //				PRINTF("Unlocking Door.\r\n");
 				setLockState(UNLOCKED);
+				sendAck();
 				break;
 			default: // Invalid command do nothing
+				sendNack();
 //				PRINTF("Invalid command.\r\n");
 				break;
 			}

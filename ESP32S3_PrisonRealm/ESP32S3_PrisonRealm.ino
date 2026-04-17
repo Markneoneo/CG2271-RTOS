@@ -43,10 +43,10 @@
 #define CMD_UNLOCK_STR "unlock"
 
 #define BUZZER_PIN 9
-#define BUZZER_DURATION 50  // How long to buzz for in ms
-#define BUZZER_VOLUME 80   // Volume as percentage
-#define BUZZER_BASE_FREQUENCY 1000 // Base buzzer frequency
-#define BUZZER_DELTA 300 // Final freq = random * delta + base
+#define BUZZER_DURATION 50          // How long to buzz for in ms
+#define BUZZER_VOLUME 80            // Volume as percentage
+#define BUZZER_BASE_FREQUENCY 1000  // Base buzzer frequency
+#define BUZZER_DELTA 300            // Final freq = random * delta + base
 
 typedef struct {
   CommandType command;
@@ -328,15 +328,19 @@ static void uartRecvTask(void *pv) {
           //   {"type":"sensor", "sensor":N, "value":V}  — upload to Supabase
           //   {"type":"state",  "door":N, "lock":N, "alarm":N} — ignore
           const char *type = doc["type"] | "sensor";  // default for legacy messages without "type"
-          if (strcmp(type, "sensor") != 0) {
-            Serial.printf("[UART RX] Ignoring type='%s'\n", type);
-          } else {
+          if (strcmp(type, "ack") == 0) {
+            Serial.println("[UART RX] ACK received.");
+          } else if (strcmp(type, "nack") == 0) {
+            Serial.printf("[UART RX] NACK received.\n");
+          } else if (strcmp(type, "sensor") == 0) {
             TSensorData entry;
             entry.sensor = (SensorType)doc["sensor"].as<int>();
             entry.value = doc["value"].as<float>();
             Serial.printf("[UART RX] sensor=%d value=%.2f\n",
                           (int)entry.sensor, entry.value);
             xQueueSend(uploadQueue, &entry, 0);
+          } else {
+            Serial.printf("[UART RX] Ignoring type='%s'\n", type);
           }
         } else {
           Serial.printf("[UART RX] JSON parse error: %s | raw: %s\n",

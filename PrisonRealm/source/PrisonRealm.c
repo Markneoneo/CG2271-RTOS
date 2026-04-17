@@ -89,7 +89,6 @@ TimerHandle_t reedAlarmTimer;
 TimerHandle_t shockDebounceTimer;
 
 // Semaphore Handles
-SemaphoreHandle_t alarmTriggered;
 
 void initUART2(uint32_t baud_rate) {
 	NVIC_DisableIRQ(UART2_FLEXIO_IRQn);
@@ -349,22 +348,6 @@ static void reedTask(void *p) {
 
 		setDoorState((event == CLOSED) ? CLOSED : OPEN);
 
-		// Actions
-//		switch (event) {
-//		case CLOSED:
-//			setAlarmState(ALARM_INACTIVE);
-//			xTimerStop(reedAlarmTimer, 0);
-//			GPIOA->PCOR |= (1 << BUZZER_PIN);
-//			reedData.value = (uint32_t) CLOSED;
-//			break;
-//		case OPEN:
-//			xTimerStart(reedAlarmTimer, 0);
-//			reedData.value = (uint32_t) OPEN;
-//			break;
-//		default:
-//			break;
-//		}
-
 		switch (event) {
 		case CLOSED:
 			xTimerStop(reedAlarmTimer, 0);
@@ -384,18 +367,12 @@ static void reedTask(void *p) {
 }
 
 void reedAlarmCallback(TimerHandle_t xTimer) {
-//	xSemaphoreGive(alarmTriggered);
 	xTaskNotify(alarmTaskHandle, (uint32_t ) ALARM_ACTIVE,
 			eSetValueWithOverwrite);
 }
 
 static void alarmTask(void *p) {
 	while (1) {
-//		xSemaphoreTake(alarmTriggered, portMAX_DELAY);
-//		setAlarmState(ALARM_ACTIVE);
-		//PRINTF("Timer has gone off\r\n");
-//		GPIOA->PSOR |= (1 << BUZZER_PIN);
-
 		uint32_t event;
 		// Clear all bits on exit
 		xTaskNotifyWait(0, 0xFFFFFFFF, &event, portMAX_DELAY);
@@ -657,7 +634,6 @@ int main(void) {
 	sensorDataQueue = xQueueCreate(QLEN, sizeof(TSensorData));
 
 	// Semaphores
-	alarmTriggered = xSemaphoreCreateBinary();
 	txDoneSem = xSemaphoreCreateBinary();
 	xSemaphoreGive(txDoneSem);
 

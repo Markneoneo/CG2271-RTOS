@@ -30,24 +30,30 @@
 
 #include "../common/protocol.h"
 
+// DHT11 (Temp and humidity sensor)
 #define DHT_PIN 7
 #define DHTTYPE DHT11
 #define TEMP_TASK_DELAY 10000  //10s
 
+// UART1 (Link to MCXC444)
 #define UART1_RX_PIN 18
 #define UART1_TX_PIN 17
 #define UART1_BAUD 115200
 
+// Supabase command polling
 #define COMMAND_POLL_MS 2000
 #define CMD_LOCK_STR "lock"
 #define CMD_UNLOCK_STR "unlock"
 
+// Buzzer for keypress feedback
 #define BUZZER_PIN 9
 #define BUZZER_DURATION 50          // How long to buzz for in ms
 #define BUZZER_VOLUME 80            // Volume as percentage
 #define BUZZER_BASE_FREQUENCY 1000  // Base buzzer frequency
 #define BUZZER_DELTA 300            // Final freq = random * delta + base
 
+// Command Struct
+// Pairs a command type with the Supabase row ID so it can be marked executed later
 typedef struct {
   CommandType command;
   int commandId;
@@ -55,8 +61,10 @@ typedef struct {
 
 Supabase db;
 DHT dht(DHT_PIN, DHTTYPE);
-QueueHandle_t uploadQueue;
-QueueHandle_t commandQueue;
+
+// FreeRTOS queues
+QueueHandle_t uploadQueue; // Waiting to be uploaded to sensor_logs
+QueueHandle_t commandQueue; // TCommand items waiting to be sent to MCXC444 over UART
 QueueHandle_t stateQueue;   // State data to upload to Supabase
 SemaphoreHandle_t dbMutex;  // Protects all Supabase calls
 TimerHandle_t buzzerTimer;
@@ -67,7 +75,7 @@ const byte COLS = 3;
 
 char keys[ROWS][COLS] = {
   { '1', '2', '3' },
-  { '4', '6', '6' },
+  { '4', '5', '6' },
   { '7', '8', '9' },
   { '*', '0', '#' }
 };
@@ -77,6 +85,8 @@ byte colPins[COLS] = { 39, 40, 41 };      // C1-C3
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
+// Even while sealed in the Prison Realm, Satoru Gojo provides
+// system diagnostics, morale support, and domain-level debugging.
 void initGojo() {
   Serial.println("[Domain Expansion] Preparing Unlimited Void...");
   Serial.println("[Prison Realm] Seal interface detected.");
@@ -95,6 +105,8 @@ void initUART1() {
                  + " TX=" + String(UART1_TX_PIN));
 }
 
+// Connect to WiFi
+// initialise SUpabase client
 void initWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.setTxPower(WIFI_POWER_19_5dBm);
@@ -120,6 +132,11 @@ void initWiFi() {
   Serial.println("[INIT] Supabase initialised.");
 }
 
+
+// Buzzer Helpers
+// 
+// Drive buzzer at a randomised frequency
+// Called on every keypress
 static void setBuzzer(int volume) {
   if (volume < 0) volume = 0;
   if (volume > 100) volume = 100;
@@ -129,6 +146,7 @@ static void setBuzzer(int volume) {
   analogWriteFrequency(BUZZER_PIN, frequency);
 }
 
+// Silence buzzer
 static void clearBuzzer() {
   analogWrite(BUZZER_PIN, 0);
 }
@@ -142,6 +160,10 @@ void initBuzzer() {
   buzzerTimer = xTimerCreate("Buzzer Timer", pdMS_TO_TICKS(BUZZER_DURATION), pdFALSE, (void *)0, buzzerTimerCallback);
 }
 
+// Supabase helpers
+//
+// Serialise a TSensorData reading to JSON and INSERT it into sensor_logs
+// Takes the dbMutex before calling client to prevent concurrent access
 static void uploadSensorToSupabase(TSensorData entry) {
   static const char *sensorNames[] = {
     "reed",         // SENSOR_REED  = 0
@@ -150,6 +172,7 @@ static void uploadSensorToSupabase(TSensorData entry) {
     "shock",        // SENSOR_SHOCK = 3
   };
 
+  // stack allocated JSON buffer
   StaticJsonDocument<256> doc;
   String json;
 
@@ -170,6 +193,8 @@ static void uploadSensorToSupabase(TSensorData entry) {
   }
 }
 
+// Serialise PrisonRealm state snapshot to JSON and INSERT it into the state table
+// Record whether the door is locked/opened and whether the alarm is active
 static void uploadStateToSupabase(SystemState state) {
   StaticJsonDocument<256> doc;
   String json;
@@ -192,6 +217,9 @@ static void uploadStateToSupabase(SystemState state) {
   }
 }
 
+// PATCH command SET executed=true where id=commandId
+// Called after a command has been forwarded to the MCXC444 so that
+// it wont be reprocessed on the next poll cycle
 static void markCommandExecuted(int commandId) {
   StaticJsonDocument<64> doc;  // Stack allocated
   String json;
@@ -213,7 +241,14 @@ static void markCommandExecuted(int commandId) {
   }
 }
 
-// Task: Upload Consumer
+// FreeRTOS Tasks
+//
+// Task: Upload Consumer (Priority = 1)
+// Continuously drains both uploadQueue (sensor readings) and stateQueue (system state snapshots)
+// POSTing each item to Supa
+// 
+// Runs at low prio to ensure it doesnt starve time critical tasks
+// (UART, keypad)
 static void uploadTask(void *pv) {
   for (;;) {
     TSensorData sensorEntry;
@@ -238,6 +273,7 @@ static void uploadTask(void *pv) {
 }
 
 // Helper to map command strings to an integer
+// Convert a command string from Supabase into the CommandType
 static CommandType commandStrToInt(const char *cmd) {
   if (strncmp(cmd, CMD_LOCK_STR, 4) == 0) return CMD_LOCK;
   if (strncmp(cmd, CMD_UNLOCK_STR, 6) == 0) return CMD_UNLOCK;
@@ -245,6 +281,12 @@ static CommandType commandStrToInt(const char *cmd) {
 }
 
 // Task: Command Poll (Supabase -> MCXC444)
+// Priority = 1
+// Every COMMAND_POLL_MS, queries Supabase for the oldest unexecuted
+// command row (aka executed=false)
+//
+// If a valid command is found, it will be pushed onto the commandQueue for uartSendTask
+// to send to the MCXC444
 static void commandPollTask(void *pv) {
   for (;;) {
     //Serial.printf("[CMD POLL] WiFi status: %d\n", WiFi.status());
@@ -292,6 +334,12 @@ static void commandPollTask(void *pv) {
 }
 
 // Task: UART Send (ESP32 -> MCXC444)
+// Priority = 2
+// Blocks on commandQueue indefitintely.
+// When TCommand arrives, it serialise it to JSON and writes it to Serial1
+// 
+// After successful send, if WiFi doesnt fail me, it marks the Supabase row executed
+// so the command isnt reissued on the next poll.
 static void uartSendTask(void *pv) {
   TCommand cmd;
   for (;;) {
@@ -313,6 +361,8 @@ static void uartSendTask(void *pv) {
 }
 
 // Task: UART Receiver (MCXC444 -> ESP32)
+// Priority = 2
+// Polls Serial1 for newline terminated JSON messages from MCXC444
 static void uartRecvTask(void *pv) {
   for (;;) {
     if (Serial1.available()) {
@@ -353,6 +403,9 @@ static void uartRecvTask(void *pv) {
 }
 
 // Task: Temperature (DHT11)
+// Priority = 2
+// Reads the temp sensor every TEMP_TASK_DELAY
+// pushes a TSensorData entry onto uploadQueue for cloud logging
 static void tempTask(void *pv) {
   for (;;) {
     float t = dht.readTemperature();
@@ -370,6 +423,7 @@ static void tempTask(void *pv) {
 
 
 // Task: Keypad -> Command Queue
+// Priority = 2
 static void keypadTask(void *pv) {
   const char correctPassword[] = "2271";
   char buffer[8];     // store entered digits
@@ -443,9 +497,14 @@ void setup() {
   initBuzzer();
   initWiFi();
 
+  // Sensor log stuff
   uploadQueue = xQueueCreate(20, sizeof(TSensorData));
+  // Commands to MCXC444
   commandQueue = xQueueCreate(10, sizeof(TCommand));
+  // State snapshots to upload
   stateQueue = xQueueCreate(10, sizeof(SystemState));
+
+  // Single mutex protects the Supabase db object across all tasks
   dbMutex = xSemaphoreCreateMutex();
 
   xTaskCreate(uploadTask, "Upload", 12288, NULL, 1, NULL);

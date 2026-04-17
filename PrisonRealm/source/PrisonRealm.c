@@ -178,6 +178,8 @@ void UART2_FLEXIO_IRQHandler(void) {
 	}
 }
 
+
+// State Utilities
 void setDoorState(DoorState door) {
 	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
 	systemState.door = door;
@@ -200,6 +202,13 @@ void setAlarmState(AlarmState alarm) {
 	xSemaphoreGive(systemStateMutex);
 
 	xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
+}
+
+static void initSystemState() {
+	systemState.door = OPEN;
+	systemState.lock = UNLOCKED;
+	systemState.alarm = ALARM_INACTIVE;
+	systemStateMutex = xSemaphoreCreateMutex();
 }
 
 void initReed() {
@@ -430,7 +439,7 @@ static void sendSensorDataTask(void *p) {
 		snprintf(msg.message, MAX_MSG_LEN,
 				"{\"type\":\"sensor\", \"sensor\":%d, \"value\":%d}\r\n",
 				(int32_t) sensorData.sensor, (uint32_t) sensorData.value);
-		PRINTF("Sending message: %s", msg.message);
+//		PRINTF("Sending message: %s", msg.message);
 		xQueueSend(msgQueue, &msg, portMAX_DELAY);
 	}
 }
@@ -585,13 +594,6 @@ static void sendStateTask(void *p) {
 	}
 }
 
-static void initSystemState() {
-	systemState.door = OPEN;
-	systemState.lock = UNLOCKED;
-	systemState.alarm = ALARM_INACTIVE;
-	systemStateMutex = xSemaphoreCreateMutex();
-}
-
 void initSW2(void) {
 	NVIC_DisableIRQ(PORTC_PORTD_IRQn);
 	SIM->SCGC5 |= SIM_SCGC5_PORTC_MASK;
@@ -627,6 +629,7 @@ int main(void) {
 	BOARD_InitDebugConsole();
 #endif
 
+	// Initialize peripherals
 	initUART2(BAUD_RATE);
 	initHX711();
 	initReed();
@@ -636,14 +639,17 @@ int main(void) {
 	initSystemState();
 	initRGB();
 
+	// Queues
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 	msgQueue = xQueueCreate(QLEN, sizeof(TMessage));
 	sensorDataQueue = xQueueCreate(QLEN, sizeof(TSensorData));
 
+	// Semaphores
 	alarmTriggered = xSemaphoreCreateBinary();
 	txDoneSem = xSemaphoreCreateBinary();
 	xSemaphoreGive(txDoneSem);
 
+	// Timers
 	reedDebounceTimer = xTimerCreate("Debounce Timer", pdMS_TO_TICKS(50),
 	pdFALSE,
 	NULL, reedDebouncedCallback);
@@ -652,29 +658,36 @@ int main(void) {
 	shockDebounceTimer = xTimerCreate("Shock Debounce", pdMS_TO_TICKS(50),
 	pdFALSE, NULL, shockDebouncedCallback);
 
+	// UART
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
 	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
+
+	// Sensors
 	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 50, NULL, 2,
 			&reedTaskHandle);
-	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 50, NULL, 3,
-			&alarmTaskHandle);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
-	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 4,
-			&servoTaskHandle);
 	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 			&shockTaskHandle);
-	xTaskCreate(sendStateTask, "sendStateTask", configMINIMAL_STACK_SIZE + 100,
-	NULL, 1, &sendStateTaskHandle);
+
+	// Actuators
+	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 50, NULL, 3,
+			&alarmTaskHandle);
+	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 4,
+			&servoTaskHandle);
 	xTaskCreate(ledTask, "ledTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
+
+	// Communications
+	xTaskCreate(sendStateTask, "sendStateTask", configMINIMAL_STACK_SIZE + 100,
+	NULL, 1, &sendStateTaskHandle);
 	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
 	configMINIMAL_STACK_SIZE + 100,
 	NULL, 2, NULL);
 
-	PRINTF("Free heap: %d\r\n", xPortGetFreeHeapSize());
+//	PRINTF("Free heap: %d\r\n", xPortGetFreeHeapSize());
 	vTaskStartScheduler();
 
 	/* Force the counter to be placed into memory. */

@@ -443,7 +443,7 @@ static void uartRecvTask(void *pv) {
             state.door = (DoorState)(doc["door"] | 0);
             state.lock = (LockState)(doc["lock"] | 0);
             state.alarm = (AlarmState)(doc["alarm"] | 0);
-            Serial.printf("[UART RX] state: door=%d lock=%d alarm=%d\n",
+            Serial.printf("[UART RX] Parsed state: door=%d lock=%d alarm=%d\n",
                 state.door, state.lock, state.alarm);
             xQueueSend(stateQueue, &state, 0);
           } else {

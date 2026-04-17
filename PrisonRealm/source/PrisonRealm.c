@@ -659,9 +659,9 @@ int main(void) {
 	pdFALSE, NULL, shockDebouncedCallback);
 
 	// UART
-	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
+	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE + 100, NULL, 4,
 	NULL);
-	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
+	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 	NULL);
 
 	// Sensors
@@ -669,11 +669,11 @@ int main(void) {
 			&reedTaskHandle);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
-	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 1,
+	xTaskCreate(shockTask, "shockTask", configMINIMAL_STACK_SIZE + 100, NULL, 2,
 			&shockTaskHandle);
 
 	// Actuators
-	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 50, NULL, 3,
+	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 50, NULL, 2,
 			&alarmTaskHandle);
 	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 4,
 			&servoTaskHandle);
@@ -682,10 +682,10 @@ int main(void) {
 
 	// Communications
 	xTaskCreate(sendStateTask, "sendStateTask", configMINIMAL_STACK_SIZE + 100,
-	NULL, 1, &sendStateTaskHandle);
+	NULL, 2, &sendStateTaskHandle);
 	xTaskCreate(sendSensorDataTask, "sendSensorDataTask",
 	configMINIMAL_STACK_SIZE + 100,
-	NULL, 2, NULL);
+	NULL, 1, NULL);
 
 //	PRINTF("Free heap: %d\r\n", xPortGetFreeHeapSize());
 	vTaskStartScheduler();

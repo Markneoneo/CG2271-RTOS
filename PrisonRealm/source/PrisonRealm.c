@@ -74,6 +74,7 @@ QueueHandle_t msgQueue; // UART Out
 // Task Handles
 TaskHandle_t reedTaskHandle = NULL;
 TaskHandle_t servoTaskHandle = NULL;
+TaskHandle_t alarmTaskHandle = NULL;
 TaskHandle_t sendStateTaskHandle = NULL;
 TaskHandle_t shockTaskHandle = NULL;
 
@@ -176,7 +177,6 @@ void UART2_FLEXIO_IRQHandler(void) {
 		}
 	}
 }
-
 
 void setDoorState(DoorState door) {
 	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
@@ -339,11 +339,26 @@ static void reedTask(void *p) {
 		setDoorState((event == CLOSED) ? CLOSED : OPEN);
 
 		// Actions
+//		switch (event) {
+//		case CLOSED:
+//			setAlarmState(ALARM_INACTIVE);
+//			xTimerStop(reedAlarmTimer, 0);
+//			GPIOA->PCOR |= (1 << BUZZER_PIN);
+//			reedData.value = (uint32_t) CLOSED;
+//			break;
+//		case OPEN:
+//			xTimerStart(reedAlarmTimer, 0);
+//			reedData.value = (uint32_t) OPEN;
+//			break;
+//		default:
+//			break;
+//		}
+
 		switch (event) {
 		case CLOSED:
-			setAlarmState(ALARM_INACTIVE);
 			xTimerStop(reedAlarmTimer, 0);
-			GPIOA->PCOR |= (1 << BUZZER_PIN);
+			xTaskNotify(alarmTaskHandle, (uint32_t ) ALARM_INACTIVE,
+					eSetValueWithOverwrite);
 			reedData.value = (uint32_t) CLOSED;
 			break;
 		case OPEN:
@@ -353,21 +368,36 @@ static void reedTask(void *p) {
 		default:
 			break;
 		}
-
 		xQueueSend(sensorDataQueue, &reedData, portMAX_DELAY);
 	}
 }
 
 void reedAlarmCallback(TimerHandle_t xTimer) {
-	xSemaphoreGive(alarmTriggered);
+//	xSemaphoreGive(alarmTriggered);
+	xTaskNotify(alarmTaskHandle, (uint32_t ) ALARM_ACTIVE,
+			eSetValueWithOverwrite);
 }
 
 static void alarmTask(void *p) {
 	while (1) {
-		xSemaphoreTake(alarmTriggered, portMAX_DELAY);
-		setAlarmState(ALARM_ACTIVE);
-		PRINTF("Timer has gone off\r\n");
-		GPIOA->PSOR |= (1 << BUZZER_PIN);
+//		xSemaphoreTake(alarmTriggered, portMAX_DELAY);
+//		setAlarmState(ALARM_ACTIVE);
+		//PRINTF("Timer has gone off\r\n");
+//		GPIOA->PSOR |= (1 << BUZZER_PIN);
+
+		uint32_t event;
+		// Clear all bits on exit
+		xTaskNotifyWait(0, 0xFFFFFFFF, &event, portMAX_DELAY);
+
+		if (event == ALARM_ACTIVE) {
+			// Update system state and enable buzzer
+			setAlarmState(ALARM_ACTIVE);
+			GPIOA->PSOR |= (1 << BUZZER_PIN);
+		} else if (event == ALARM_INACTIVE) {
+			// Update system state and disable buzzer
+			GPIOA->PCOR |= (1 << BUZZER_PIN);
+			setAlarmState(ALARM_INACTIVE);
+		}
 	}
 }
 
@@ -562,7 +592,6 @@ static void initSystemState() {
 	systemStateMutex = xSemaphoreCreateMutex();
 }
 
-
 void initSW2(void) {
 	NVIC_DisableIRQ(PORTC_PORTD_IRQn);
 	SIM->SCGC5 |= SIM_SCGC5_PORTC_MASK;
@@ -630,7 +659,7 @@ int main(void) {
 	xTaskCreate(reedTask, "reedTask", configMINIMAL_STACK_SIZE + 50, NULL, 2,
 			&reedTaskHandle);
 	xTaskCreate(alarmTask, "alarmTask", configMINIMAL_STACK_SIZE + 50, NULL, 3,
-	NULL);
+			&alarmTaskHandle);
 	xTaskCreate(hx711Task, "hx711Task", configMINIMAL_STACK_SIZE + 100, NULL, 1,
 	NULL);
 	xTaskCreate(servoTask, "servoTask", configMINIMAL_STACK_SIZE + 50, NULL, 4,

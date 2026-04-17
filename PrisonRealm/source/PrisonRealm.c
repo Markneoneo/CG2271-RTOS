@@ -192,14 +192,13 @@ void setDoorState(DoorState door) {
 
 	xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
 }
-
 void setLockState(LockState lock) {
 	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
 	systemState.lock = lock;
 	xSemaphoreGive(systemStateMutex);
 
 	xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
-	xTaskNotifyGive(servoTaskHandle);     // Fire servo based on desired state
+    xTaskNotify(servoTaskHandle, lock, eSetValueWithOverwrite); // Send lock state to servo task
 }
 void setAlarmState(AlarmState alarm) {
 	xSemaphoreTake(systemStateMutex, portMAX_DELAY);
@@ -208,7 +207,6 @@ void setAlarmState(AlarmState alarm) {
 
 	xTaskNotifyGive(sendStateTaskHandle); // Send changed state to ESP32
 }
-
 static void initSystemState() {
 	systemState.door = OPEN;
 	systemState.lock = UNLOCKED;
@@ -526,15 +524,10 @@ static void sendTask(void *p) {
 
 static void servoTask(void *p) {
 	while (1) {
-		// Wait until something changes
-		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		SystemState s;
+        uint32_t lock;
+        xTaskNotifyWait(0, 0xFFFFFFFF, &lock, portMAX_DELAY); // Wait for lock state update from recvTask, clear all bits on exit
 
-		xSemaphoreTake(systemStateMutex, portMAX_DELAY);
-		s = systemState;
-		xSemaphoreGive(systemStateMutex);
-
-		if (s.lock == LOCKED)
+		if (lock == LOCKED)
 			servoLock();
 		else
 			servoUnlock();

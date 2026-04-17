@@ -52,6 +52,12 @@
 #define BUZZER_BASE_FREQUENCY 1000  // Base buzzer frequency
 #define BUZZER_DELTA 300            // Final freq = random * delta + base
 
+#define MAX_RETRIES 3          // How many retries for sending command
+#define SEND_CMD_TIMEOUT 1000  // How long to wait for ACK/NACK
+
+#define NOTIF_ACK 1
+#define NOTIF_NACK 2
+
 // Command Struct
 // Pairs a command type with the Supabase row ID so it can be marked executed later
 typedef struct {
@@ -63,11 +69,12 @@ Supabase db;
 DHT dht(DHT_PIN, DHTTYPE);
 
 // FreeRTOS queues
-QueueHandle_t uploadQueue; // Waiting to be uploaded to sensor_logs
-QueueHandle_t commandQueue; // TCommand items waiting to be sent to MCXC444 over UART
-QueueHandle_t stateQueue;   // State data to upload to Supabase
-SemaphoreHandle_t dbMutex;  // Protects all Supabase calls
+QueueHandle_t uploadQueue;   // Waiting to be uploaded to sensor_logs
+QueueHandle_t commandQueue;  // TCommand items waiting to be sent to MCXC444 over UART
+QueueHandle_t stateQueue;    // State data to upload to Supabase
+SemaphoreHandle_t dbMutex;   // Protects all Supabase calls
 TimerHandle_t buzzerTimer;
+TaskHandle_t uartSendTaskHandle = nullptr;
 
 // Keypad setup
 const byte ROWS = 4;
@@ -84,6 +91,11 @@ byte rowPins[ROWS] = { 35, 36, 37, 38 };  // R1-R4
 byte colPins[COLS] = { 39, 40, 41 };      // C1-C3
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+// For retrying of commands
+TCommand prevCmd;
+int numFailedAttempts = 0;  // number of failed NACK attempts
+
 
 // Even while sealed in the Prison Realm, Satoru Gojo provides
 // system diagnostics, morale support, and domain-level debugging.
@@ -134,7 +146,7 @@ void initWiFi() {
 
 
 // Buzzer Helpers
-// 
+//
 // Drive buzzer at a randomised frequency
 // Called on every keypress
 static void setBuzzer(int volume) {
@@ -246,7 +258,7 @@ static void markCommandExecuted(int commandId) {
 // Task: Upload Consumer (Priority = 1)
 // Continuously drains both uploadQueue (sensor readings) and stateQueue (system state snapshots)
 // POSTing each item to Supa
-// 
+//
 // Runs at low prio to ensure it doesnt starve time critical tasks
 // (UART, keypad)
 static void uploadTask(void *pv) {
@@ -333,25 +345,50 @@ static void commandPollTask(void *pv) {
   }
 }
 
+
 // Task: UART Send (ESP32 -> MCXC444)
 // Priority = 2
 // Blocks on commandQueue indefitintely.
 // When TCommand arrives, it serialise it to JSON and writes it to Serial1
-// 
+//
 // After successful send, if WiFi doesnt fail me, it marks the Supabase row executed
 // so the command isnt reissued on the next poll.
 static void uartSendTask(void *pv) {
   TCommand cmd;
+  uint32_t notifValue = 0;
   for (;;) {
     if (xQueueReceive(commandQueue, &cmd, portMAX_DELAY) == pdTRUE) {
+      prevCmd = cmd;  // Remember previous command
+
       StaticJsonDocument<128> doc;  // Stack allocated
       String json;
       doc["command"] = cmd.command;
       serializeJson(doc, json);
       json += "\n";
 
+      // clear any stale notification before sending
+      xTaskNotifyStateClear(uartSendTaskHandle);
       Serial1.print(json);
       Serial.printf("[UART TX] Sent: %s", json.c_str());
+
+      // wait for ACK/NACK
+      BaseType_t ok = xTaskNotifyWait(0, 0xFFFFFFFF, &notifValue, pdMS_TO_TICKS(SEND_CMD_TIMEOUT));
+
+      if (ok == pdTRUE && notifValue == NOTIF_ACK) {
+        // Got an ACK
+        numFailedAttempts = 0;
+        Serial.println("[UART TX] ACK received");
+      } else {
+        // Either timeout or NACK
+        // In both cases, increment counter and retry if below limit.
+        numFailedAttempts++;
+
+        if (numFailedAttempts < MAX_RETRIES) {
+          xQueueSendToFront(commandQueue, &prevCmd, 0);
+        } else {
+          numFailedAttempts = 0; // Give up
+        }
+      }
 
       if (WiFi.status() == WL_CONNECTED) {
         markCommandExecuted(cmd.commandId);
@@ -380,8 +417,13 @@ static void uartRecvTask(void *pv) {
           const char *type = doc["type"] | "sensor";  // default for legacy messages without "type"
           if (strcmp(type, "ack") == 0) {
             Serial.println("[UART RX] ACK received.");
+            xTaskNotify(uartSendTaskHandle, NOTIF_ACK, eSetValueWithOverwrite);
+
           } else if (strcmp(type, "nack") == 0) {
+            // Chinese wires have failed us
             Serial.printf("[UART RX] NACK received.\n");
+            xTaskNotify(uartSendTaskHandle, NOTIF_NACK, eSetValueWithOverwrite);
+
           } else if (strcmp(type, "sensor") == 0) {
             TSensorData entry;
             entry.sensor = (SensorType)doc["sensor"].as<int>();
@@ -507,9 +549,11 @@ void setup() {
   // Single mutex protects the Supabase db object across all tasks
   dbMutex = xSemaphoreCreateMutex();
 
+  ackSem = xSemaphoreCreateBinary();
+
   xTaskCreate(uploadTask, "Upload", 12288, NULL, 1, NULL);
   xTaskCreate(uartRecvTask, "UART_Rx", 8192, NULL, 2, NULL);
-  xTaskCreate(uartSendTask, "UART_Tx", 8192, NULL, 2, NULL);
+  xTaskCreate(uartSendTask, "UART_Tx", 8192, NULL, 2, &uartSendTaskHandle);
 
   xTaskCreate(tempTask, "Temp", 8192, NULL, 2, NULL);
   xTaskCreate(keypadTask, "Keypad", 8192, NULL, 2, NULL);
